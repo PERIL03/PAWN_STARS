@@ -1,4 +1,4 @@
-# Chess Crypt ♟️🔐
+# ROOKHIDE ♟️🔐
 
 A steganography system that hides arbitrary files inside valid chess games. Data is encoded into move choices — each legal position offers multiple valid moves, and by selecting specific ones we embed bits of information that appear as natural chess gameplay.
 
@@ -76,8 +76,8 @@ Throughput: ~1M moves/sec (encode), ~1.4M moves/sec (decode) on Apple Silicon.
 
 ```bash
 # Clone
-git clone https://github.com/<your-username>/chess-crypt.git
-cd chess-crypt
+git clone https://github.com/<your-username>/rookhide.git
+cd rookhide
 
 # Build the Rust extension
 cd rust_engine

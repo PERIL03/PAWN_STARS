@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: chess-crypt
+    name: rookhide
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
