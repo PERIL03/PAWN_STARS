@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Steganography Visualizer</title>
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1a1a2e;
+            --secondary-color: #16213e;
+            --accent-color: #0f3460;
+            --highlight-color: #e94560;
+            --text-light: #ffffff;
+            --text-dark: #333333;
+            --transition: all 0.3s ease;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        /* Navigation Bar Styles */
+        .nav-container {
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 5%;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+        }
+        
+        .nav-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .logo img {
+            height: 50px;
+            width: 240px;
+            transition: var(--transition);
+        }
+        
+        .logo img:hover {
+            transform: scale(1.05);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .nav-links a {
+            color: var(--text-light);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 1.1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            transition: var(--transition);
+        }
+        
+        .nav-links a:hover {
+            background: var(--highlight-color);
+            transform: translateY(-2px);
+        }
+        
+        .nav-links a.active {
+            background: var(--highlight-color);
+        }
+
+        /* Responsive Navigation */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 120px auto 40px;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow);
+        }
+
+        h1, h2, h3 {
+            color: var(--text-light);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            background: linear-gradient(45deg, var(--text-light), var(--highlight-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--highlight-color);
+        }
+
+        h3 {
+            font-size: 1.4rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .upload-section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border-radius: 10px;
+            background: linear-gradient(145deg, rgba(26, 26, 46, 0.9), rgba(15, 52, 96, 0.9));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .visualization-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .board-container, .info-container {
+            flex: 1;
+            min-width: 350px;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-section {
+            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        #chessboard {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            border: 2px solid var(--highlight-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .stats-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 1.5rem 0;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 8px;
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-box h4 {
+            margin: 0 0 5px 0;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            opacity: 0.8;
+        }
+
+        .stat-box p {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--highlight-color);
+        }
+
+        .moves-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .binary-view {
+            font-family: monospace;
+            max-height: 100px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-light);
+        }
+
+        button {
+            padding: 0.8rem 1.5rem;
+            background-color: var(--highlight-color);
+            color: var(--text-light);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        .btn-reset {
+            background-color: #f44336;
+        }
+
+        .btn-reset:hover {
+            background-color: #d32f2f;
+        }
+
+        input[type="file"] {
+            margin-bottom: 1rem;
+            color: var(--text-light);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--highlight-color);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        select {
+            padding: 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: var(--text-light);
+            outline: none;
+        }
+
+        .encoding-progress {
+            height: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            margin-top: 1rem;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--highlight-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .move {
+            display: inline-block;
+            margin-right: 10px;
+            margin-bottom: 5px;
+            padding: 5px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .highlight {
+            background-color: var(--highlight-color);
+            color: var(--text-light);
+        }
+
+        .options-section {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .options-section > div {
+            flex: 1;
+        }
+
+        .processing-speed {
+            display: flex;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .processing-speed label {
+            margin-right: 10px;
+            color: var(--text-light);
+        }
+
+        #speedControl {
+            flex: 1;
+        }
+
+        #speedValue {
+            color: var(--highlight-color);
+            font-weight: 500;
+            width: 60px;
+            text-align: right;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--highlight-color);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-color);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                margin: 100px 1rem 20px;
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .options-section {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="nav-container">
+        <div class="nav-content">
+            <a href="/" class="logo">
+                <img src="/static/logo.png" alt="Chess Crypt Logo" onerror="this.src='https://via.placeholder.com/240x50/1a1a2e/e94560?text=Chess+Crypt'">
+            </a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/file_upload">Encrypt/Decrypt</a>
+                <a href="/preview" class="active">Live Preview</a>
+                <a href="/visualizer">Visualizer</a>
+                <a href="/about">About Team</a>
+                <a href="/get_in_touch">Contact</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        <h1>Chess Steganography Visualizer</h1>
+
+        <div class="upload-section">
+            <h2>Upload File for Live Encryption Preview</h2>
+            <div class="options-section">
+                <div>
+                    <label for="fileInput">Select file to encrypt:</label>
+                    <input type="file" id="fileInput" accept=".txt,.png,.jpg,.jpeg">
+                </div>
+                <div>
+                    <label for="fileTypeSelect">File type:</label>
+                    <select id="fileTypeSelect">
+                        <option value="text">Text</option>
+                        <option value="image">Image</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="processing-speed">
+                <label for="speedControl">Processing Speed:</label>
+                <input type="range" id="speedControl" min="50" max="1000" step="50" value="300">
+                <span id="speedValue">300ms</span>
+            </div>
+
+            <button id="startVisualization">Start Visualization</button>
+            <button id="resetVisualization" class="btn-reset">Reset</button>
+
+            <div class="encoding-progress">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="visualization-container">
+            <div class="board-container">
+                <h2>Chess Board</h2>
+                <div id="chessboard"></div>
+
+                <div class="stats-panel">
+                    <div class="stat-box">
+                        <h4>Game</h4>
+                        <p id="gameCount">0</p>
+                    </div>
+                    <div class="stat-box">
+                        <h4>Move</h4>
+                        <p id="moveCount">0</p>
+                    </div>
+                    <div class="stat-box">
+                        <h4>Progress</h4>
+                        <p id="progressPercent">0%</p>
+                    </div>
+                </div>
+
+                <h3>Latest Moves</h3>
+                <div class="moves-list" id="movesList"></div>
+            </div>
+
+            <div class="info-container">
+                <h2>Encoding Information</h2>
+
+                <div class="data-section">
+                    <h3>File Information</h3>
+                    <div id="fileInfo">
+                        <p>No file selected</p>
+                    </div>
+
+                    <h3>Current Encoding Step</h3>
+                    <div id="encodingInfo">
+                        <p>Waiting to start...</p>
+                    </div>
+
+                    <h3>Binary View</h3>
+                    <div class="binary-view" id="binaryView">
+                        <p>Binary data will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let board = null;
+        let chess = new Chess();
+        let fileData = null;
+        let fileByteArray = [];
+        let currentBitIndex = 0;
+        let totalBits = 0;
+        let gameCount = 0;
+        let moveCount = 0;
+        let processingSpeed = 300;
+        let processingInterval = null;
+
+        // Initialize the chess board
+        function initializeBoard() {
+            const config = {
+                position: 'start',
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+            };
+            board = Chessboard('chessboard', config);
+            
+            // Force a redraw to ensure pieces are visible
+            setTimeout(() => {
+                if (board) {
+                    const currentPosition = board.position();
+                    board.position(currentPosition, true);
+                }
+            }, 500);
+        }
+
+        // Reset everything
+        function resetVisualization() {
+            if (processingInterval) {
+                clearInterval(processingInterval);
+                processingInterval = null;
+            }
+
+            chess.reset();
+            if (board) {
+                board.position(chess.fen());
+            }
+
+            fileData = null;
+            fileByteArray = [];
+            currentBitIndex = 0;
+            totalBits = 0;
+            gameCount = 0;
+            moveCount = 0;
+
+            updateStats();
+            updateProgress(0);
+
+            $('#movesList').html('');
+            $('#fileInfo').html('<p>No file selected</p>');
+            $('#encodingInfo').html('<p>Waiting to start...</p>');
+            $('#binaryView').html('<p>Binary data will appear here</p>');
+        }
+
+        // Update the statistics display
+        function updateStats() {
+            $('#gameCount').text(gameCount);
+            $('#moveCount').text(moveCount);
+
+            if (totalBits > 0) {
+                const percent = Math.floor((currentBitIndex / totalBits) * 100);
+                $('#progressPercent').text(percent + '%');
+            } else {
+                $('#progressPercent').text('0%');
+            }
+        }
+
+        // Update the progress bar
+        function updateProgress(percent) {
+            $('#progressBar').css('width', percent + '%');
+        }
+
+        // Add a move to the moves list
+        function addMoveToList(move, bits) {
+            const moveElement = $('<span class="move"></span>')
+                .text(`${moveCount}: ${move} (${bits})`)
+                .appendTo('#movesList');
+
+            // Scroll to the bottom
+            const movesList = document.getElementById('movesList');
+            movesList.scrollTop = movesList.scrollHeight;
+
+            // Highlight briefly
+            moveElement.addClass('highlight');
+            setTimeout(() => moveElement.removeClass('highlight'), 1000);
+        }
+
+        // Extract bits from the file data
+        function extractBits(index, count) {
+            if (index >= totalBits) return null;
+
+            let result = '';
+            for (let i = 0; i < count && index + i < totalBits; i++) {
+                const byteIndex = Math.floor((index + i) / 8);
+                const bitOffset = 7 - ((index + i) % 8); // MSB first
+                const bit = (fileByteArray[byteIndex] >> bitOffset) & 1;
+                result += bit;
+            }
+
+            return result;
+        }
+
+        // Get legal moves and display encoding information
+        function getLegalMovesAndEncodeInfo() {
+            const legalMoves = [];
+
+            // Get all legal moves
+            const possibleMoves = chess.moves({
+                verbose: true
+            });
+            for (const move of possibleMoves) {
+                legalMoves.push(move);
+            }
+
+            // Calculate max bits we can encode in this position
+            const maxBits = Math.floor(Math.log2(legalMoves.length));
+
+            // Update encoding info display
+            let infoHtml = `
+                <p><strong>Legal moves:</strong> ${legalMoves.length}</p>
+                <p><strong>Max bits per move:</strong> ${maxBits}</p>
+            `;
+
+            if (legalMoves.length <= 1) {
+                infoHtml += `<p><em>Forced move or no legal moves available.</em></p>`;
+            }
+
+            $('#encodingInfo').html(infoHtml);
+
+            return {
+                legalMoves,
+                maxBits
+            };
+        }
+
+        // Process the next move in the encryption simulation
+        function processNextMove() {
+            if (currentBitIndex >= totalBits) {
+                clearInterval(processingInterval);
+                $('#encodingInfo').html('<p><strong>Encoding complete!</strong></p>');
+                updateProgress(100);
+                return;
+            }
+
+            const {
+                legalMoves,
+                maxBits
+            } = getLegalMovesAndEncodeInfo();
+
+            // Check if we have a forced move or game over
+            if (legalMoves.length <= 1) {
+                if (legalMoves.length === 1) {
+                    // Make the forced move
+                    chess.move(legalMoves[0]);
+                    board.position(chess.fen());
+                    moveCount++;
+                    addMoveToList(legalMoves[0].san, 'forced');
+                } else {
+                    // No legal moves, start a new game
+                    gameCount++;
+                    chess.reset();
+                    board.position(chess.fen());
+                    $('#encodingInfo').html('<p><em>Game over. Starting new game.</em></p>');
+                }
+                updateStats();
+                return;
+            }
+
+            // We can encode some bits in this position
+            const bitsToEncode = Math.min(maxBits, totalBits - currentBitIndex);
+            const bits = extractBits(currentBitIndex, bitsToEncode);
+            const moveIndex = parseInt(bits, 2) % legalMoves.length;
+
+            // Display the binary data being encoded
+            let binaryViewHtml = '';
+            for (let i = Math.max(0, currentBitIndex - 16); i < Math.min(totalBits, currentBitIndex + 16); i++) {
+                const bit = extractBits(i, 1);
+                if (i >= currentBitIndex && i < currentBitIndex + bitsToEncode) {
+                    binaryViewHtml += `<span style="color: red; font-weight: bold;">${bit}</span>`;
+                } else {
+                    binaryViewHtml += bit;
+                }
+
+                if ((i + 1) % 8 === 0) binaryViewHtml += ' ';
+            }
+            $('#binaryView').html(binaryViewHtml);
+
+            // Make the move
+            const move = legalMoves[moveIndex];
+            chess.move(move);
+            board.position(chess.fen());
+            moveCount++;
+
+            // Update the display
+            addMoveToList(move.san, bits);
+            currentBitIndex += bitsToEncode;
+
+            // Update progress
+            const progressPercent = Math.floor((currentBitIndex / totalBits) * 100);
+            updateProgress(progressPercent);
+            updateStats();
+
+            // Check if we need to start a new game
+            if (chess.game_over() || chess.history().length >= 50) {
+                gameCount++;
+                chess.reset();
+                board.position(chess.fen());
+                $('#encodingInfo').html('<p><em>Game over. Starting new game.</em></p>');
+            }
+        }
+
+        // Start the visualization process
+        function startVisualization() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select a file first.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const fileType = document.getElementById('fileTypeSelect').value;
+
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                resetVisualization();
+
+                fileData = e.target.result;
+
+                // Convert the file data to byte array
+                fileByteArray = new Uint8Array(fileData);
+                totalBits = fileByteArray.length * 8;
+
+                // Update file info display directly (no server request in standalone version)
+                $('#fileInfo').html(`
+                    <p><strong>File name:</strong> ${file.name}</p>
+                    <p><strong>File size:</strong> ${file.size} bytes (${totalBits} bits)</p>
+                    <p><strong>File type:</strong> ${fileType}</p>
+                `);
+
+                // Start processing at the specified interval
+                processingInterval = setInterval(processNextMove, processingSpeed);
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Initialize the UI when the page loads
+        $(document).ready(function () {
+            initializeBoard();
+
+            // Attach event handlers
+            $('#startVisualization').on('click', startVisualization);
+            $('#resetVisualization').on('click', resetVisualization);
+
+            // Speed control
+            $('#speedControl').on('input', function () {
+                processingSpeed = parseInt($(this).val());
+                $('#speedValue').text(processingSpeed + 'ms');
+
+                // Update the processing interval if active
+                if (processingInterval) {
+                    clearInterval(processingInterval);
+                    processingInterval = setInterval(processNextMove, processingSpeed);
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

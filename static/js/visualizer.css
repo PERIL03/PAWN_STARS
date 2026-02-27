@@ -1,0 +1,232 @@
+/* Base styles and variables inherited from main CSS */
+:root {
+    --primary-color: #1a1a2e;
+    --secondary-color: #16213e;
+    --accent-color: #0f3460;
+    --highlight-color: #e94560;
+    --text-light: #ffffff;
+    --text-dark: #333333;
+    --transition: all 0.3s ease;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.visualizer-container {
+    max-width: 1200px;
+    margin: 120px auto 40px;
+    padding: 2rem;
+}
+
+.visualizer-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.visualizer-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    background: linear-gradient(45deg, var(--text-light), var(--highlight-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.visualizer-header p {
+    color: var(--text-light);
+    opacity: 0.8;
+    font-size: 1.1rem;
+}
+
+.visualizer-content {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 2rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    padding: 2rem;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.board-container {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.chess-board {
+    width: 100%;
+    max-width: 600px;
+    aspect-ratio: 1;
+    margin: 0 auto;
+    border: 2px solid var(--highlight-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.controls {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.control-btn {
+    background: var(--highlight-color);
+    color: var(--text-light);
+    border: none;
+    border-radius: 8px;
+    padding: 0.8rem 1.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+}
+
+.control-btn:hover {
+    background: var(--accent-color);
+    transform: translateY(-2px);
+}
+
+.control-btn:disabled {
+    background: rgba(255, 255, 255, 0.1);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.moves-panel {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 1.5rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.moves-panel h3 {
+    color: var(--highlight-color);
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.moves-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.move-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.move-item:hover {
+    background: rgba(233, 69, 96, 0.2);
+}
+
+.move-item.active {
+    background: var(--highlight-color);
+}
+
+.move-number {
+    color: var(--highlight-color);
+    font-weight: 500;
+    margin-right: 1rem;
+    min-width: 2rem;
+}
+
+.move-notation {
+    color: var(--text-light);
+}
+
+/* Scrollbar Styling */
+.moves-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.moves-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.moves-list::-webkit-scrollbar-thumb {
+    background: var(--highlight-color);
+    border-radius: 3px;
+}
+
+.moves-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-color);
+}
+
+/* File Upload Section */
+.file-upload {
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.file-input {
+    display: none;
+}
+
+.file-label {
+    background: var(--highlight-color);
+    color: var(--text-light);
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.file-label:hover {
+    background: var(--accent-color);
+    transform: translateY(-2px);
+}
+
+.file-info {
+    margin-top: 1rem;
+    color: var(--text-light);
+    opacity: 0.8;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .visualizer-content {
+        grid-template-columns: 1fr;
+    }
+    
+    .moves-panel {
+        height: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .visualizer-container {
+        margin: 100px 1rem 20px;
+        padding: 1rem;
+    }
+
+    .visualizer-header h1 {
+        font-size: 2rem;
+    }
+
+    .controls {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .control-btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+    }
+}

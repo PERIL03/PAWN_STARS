@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us - Chess Crypt</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="nav-container">
+        <div class="nav-content">
+            <a href="{{ url_for('index') }}" class="logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Chess Crypt Logo">
+            </a>
+            <div class="nav-links">
+                <a href="{{ url_for('home') }}">Home</a>
+                <a href="{{ url_for('file_upload') }}">Encrypt/Decrypt</a>
+                <a href="{{ url_for('preview') }}">Live Preview</a>
+                <a href="{{ url_for('visualizer') }}" class="active">Visualizer</a>
+                <a href="{{ url_for('about') }}">About Team</a>
+                <a href="{{ url_for('get_in_touch') }}">Contact</a>
+
+            </div>
+        </div>
+    </nav>
+
+    <section class="contact-section">
+        <div class="section-header">
+            <h1>Get in Touch</h1>
+            <p>Have questions? We'd love to hear from you.</p>
+        </div>
+
+        <div class="contact-container">
+            <div class="contact-form card">
+                <form action="https://api.web3forms.com/submit" method="POST">
+                    <input type="hidden" name="access_key" value="20803485-7ad7-4096-8ac3-892f7353966d">
+                    
+                    <div class="form-group">
+                        <label for="name">Your Name</label>
+                        <input type="text" id="name" name="name" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Your Email</label>
+                        <input type="email" id="email" name="email" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="message">Your Message</label>
+                        <textarea id="message" name="message" class="form-control" rows="5" required></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i>
+                        Send Message
+                    </button>
+                </form>
+            </div>
+
+            <div class="contact-info card">
+                <div class="info-item">
+                    <i class="fas fa-envelope"></i>
+                    <h3>Email Us</h3>
+                    <p>chesscrytcse@gmail.com</p>
+                </div>
+                <div class="info-item">
+                    <i class="fas fa-clock"></i>
+                    <h3>Response Time</h3>
+                    <p>Within 24 hours</p>
+                </div>
+                <div class="info-item">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>Security First</h3>
+                    <p>Your data is always protected</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>

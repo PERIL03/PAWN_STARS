@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.DS_Store
+rust_engine/target/
+benchmark_results*/
+Comparison Outputs/
+uploads/
+outputs/
+*.bin
+*.whl
+decoded_output.png
+bench_*.py
+test_*.py
+rust_core_bench.py

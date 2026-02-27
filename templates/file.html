@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrypt/Decrypt Files - Chess Crypt</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="nav-container">
+        <div class="nav-content">
+            <a href="{{ url_for('index') }}" class="logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Chess Crypt Logo">
+            </a>
+            <div class="nav-links">
+                <a href="{{ url_for('home') }}">Home</a>
+                <a href="{{ url_for('file_upload') }}">Encrypt/Decrypt</a>
+                <a href="{{ url_for('preview') }}">Live Preview</a>
+                <a href="{{ url_for('visualizer') }}" class="active">Visualizer</a>
+                <a href="{{ url_for('about') }}">About Team</a>
+                <a href="{{ url_for('get_in_touch') }}">Contact</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="upload-container">
+        <div class="upload-section">
+            <div class="section-header">
+                <h2>File Encryption Tool</h2>
+                <p class="section-description">Secure your files using advanced chess-based steganography</p>
+            </div>
+
+            <form id="uploadForm" class="upload-form" method="POST" enctype="multipart/form-data">
+                <div class="options-container">
+                    <div class="option-group">
+                        <h3><i class="fas fa-cog"></i> Choose Operation</h3>
+                        <div class="radio-group">
+                            <label class="radio-card">
+                                <input type="radio" name="action" value="encode" id="encodeRadio" required>
+                                <div class="radio-content">
+                                    <i class="fas fa-lock"></i>
+                                    <span>Encrypt File</span>
+                                    <div class="check-icon">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="radio-card">
+                                <input type="radio" name="action" value="decode" id="decodeRadio" required>
+                                <div class="radio-content">
+                                    <i class="fas fa-unlock"></i>
+                                    <span>Decrypt File</span>
+                                    <div class="check-icon">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="option-group">
+                        <h3><i class="fas fa-file-alt"></i> File Type</h3>
+                        <div class="radio-group">
+                            <label class="radio-card">
+                                <input type="radio" name="file_type" value="text" required>
+                                <div class="radio-content">
+                                    <i class="fas fa-file-alt"></i>
+                                    <span>Text File</span>
+                                    <div class="check-icon">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="radio-card">
+                                <input type="radio" name="file_type" value="image" required>
+                                <div class="radio-content">
+                                    <i class="fas fa-image"></i>
+                                    <span>Image File</span>
+                                    <div class="check-icon">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Self-Destruct Timer Options -->
+                    <div id="selfDestructOptions" class="option-group" style="display: none;">
+                        <h3><i class="fas fa-bomb"></i> Self-Destruct Timer</h3>
+                        <div class="checkbox-container">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="enableSelfDestruct" name="enable_self_destruct">
+                                <span>Enable Time-Locked Decryption</span>
+                            </label>
+                        </div>
+                        <div id="selfDestructSettings" style="display: none; margin-top: 15px;">
+                            <div class="time-input-container">
+                                <label for="destructDuration">File will be available for decryption for:</label>
+                                <div class="duration-inputs">
+                                    <div class="duration-input-group">
+                                        <input type="number" id="destructHours" name="destruct_hours" min="0" max="24" value="0">
+                                        <span>Hours</span>
+                                    </div>
+                                    <div class="duration-input-group">
+                                        <input type="number" id="destructMinutes" name="destruct_minutes" min="0" max="59" value="10">
+                                        <span>Minutes</span>
+                                    </div>
+                                    <div class="duration-input-group">
+                                        <input type="number" id="destructSeconds" name="destruct_seconds" min="0" max="59" value="0">
+                                        <span>Seconds</span>
+                                    </div>
+                                </div>
+                                <p class="destruct-warning">After this period, the file will become permanently undecryptable.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- PGN Metadata Options -->
+                    <div id="pgnMetadataOptions" class="option-group" style="display: none;">
+                        <h3><i class="fas fa-chess"></i> PGN Metadata <button type="button" id="toggleMetadata" class="toggle-btn"><i class="fas fa-chevron-down"></i></button></h3>
+                        <p class="metadata-description">Customize chess game headers to make encrypted files look authentic</p>
+                        
+                        <div id="pgnMetadataSettings" style="display: none; margin-top: 15px;">
+                            <div class="metadata-grid">
+                                <div class="metadata-field">
+                                    <label for="pgn_event">Event Name:</label>
+                                    <input type="text" id="pgn_event" name="pgn_event" placeholder="World Chess Championship">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_site">Site/Location:</label>
+                                    <input type="text" id="pgn_site" name="pgn_site" placeholder="New York, USA">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_date">Date:</label>
+                                    <input type="text" id="pgn_date" name="pgn_date" placeholder="2025.02.28">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_round">Round:</label>
+                                    <input type="text" id="pgn_round" name="pgn_round" placeholder="1">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_white">White Player:</label>
+                                    <input type="text" id="pgn_white" name="pgn_white" placeholder="Magnus Carlsen">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_black">Black Player:</label>
+                                    <input type="text" id="pgn_black" name="pgn_black" placeholder="Ian Nepomniachtchi">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_whiteelo">White Elo:</label>
+                                    <input type="text" id="pgn_whiteelo" name="pgn_whiteelo" placeholder="2835">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_blackelo">Black Elo:</label>
+                                    <input type="text" id="pgn_blackelo" name="pgn_blackelo" placeholder="2792">
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_result">Result:</label>
+                                    <select id="pgn_result" name="pgn_result">
+                                        <option value="*" selected>Ongoing (*)</option>
+                                        <option value="1-0">White Wins (1-0)</option>
+                                        <option value="0-1">Black Wins (0-1)</option>
+                                        <option value="1/2-1/2">Draw (1/2-1/2)</option>
+                                    </select>
+                                </div>
+                                <div class="metadata-field">
+                                    <label for="pgn_eco">ECO Code:</label>
+                                    <input type="text" id="pgn_eco" name="pgn_eco" placeholder="E04">
+                                </div>
+                            </div>
+                            <div class="preset-container">
+                                <button type="button" id="randomizeMetadata" class="preset-btn">
+                                    <i class="fas fa-random"></i> Randomize
+                                </button>
+                                <div class="preset-dropdown">
+                                    <button type="button" id="presetDropdownBtn" class="preset-btn">
+                                        <i class="fas fa-list"></i> Load Preset
+                                    </button>
+                                    <div id="presetDropdownContent" class="preset-dropdown-content">
+                                        <a href="#" data-preset="worldchampionship">World Championship</a>
+                                        <a href="#" data-preset="candidates">Candidates Tournament</a>
+                                        <a href="#" data-preset="grandprix">Grand Prix</a>
+                                        <a href="#" data-preset="online">Online Event</a>
+                                    </div>
+                                </div>
+                                <button type="button" id="clearMetadata" class="preset-btn">
+                                    <i class="fas fa-eraser"></i> Clear All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="file-upload-container">
+                    <input type="file" id="fileInput" name="file" class="file-input" required>
+                    <label for="fileInput" class="file-drop-zone">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <div class="upload-text">
+                            <span class="primary-text">Drag and drop your file here</span>
+                            <span class="secondary-text">or click to browse</span>
+                        </div>
+                        <p class="selected-file">No file selected</p>
+                    </label>
+                </div>
+
+                <button type="submit" class="submit-btn">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Process File</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        .checkbox-container {
+            margin-top: 10px;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .checkbox-label input {
+            margin-right: 10px;
+        }
+        .time-input-container {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .duration-inputs {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+        .duration-input-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .duration-input-group input {
+            width: 60px;
+            padding: 8px;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+        }
+        .duration-input-group span {
+            margin-top: 5px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .destruct-warning {
+            margin-top: 15px;
+            color: #ff6b6b;
+            font-size: 14px;
+            font-style: italic;
+        }
+        
+        /* PGN Metadata Styles */
+        .metadata-description {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metadata-field {
+            display: flex;
+            flex-direction: column;
+        }
+        .metadata-field label {
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .metadata-field input, .metadata-field select {
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+        }
+        .metadata-field input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            margin-left: 10px;
+            padding: 0;
+            font-size: 16px;
+        }
+        .preset-container {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        .preset-btn {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .preset-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .preset-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .preset-dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #2a2a2a;
+            min-width: 180px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.5);
+            z-index: 1;
+            border-radius: 4px;
+            top: 100%;
+            margin-top: 5px;
+        }
+        .preset-dropdown-content a {
+            color: white;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .preset-dropdown-content a:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .preset-dropdown:hover .preset-dropdown-content {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .metadata-grid {
+                grid-template-columns: 1fr;
+            }
+            .preset-container {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileLabel = document.querySelector('.selected-file');
+        const form = document.getElementById('uploadForm');
+        const dropZone = document.querySelector('.file-drop-zone');
+        const encodeRadio = document.getElementById('encodeRadio');
+        const decodeRadio = document.getElementById('decodeRadio');
+        const selfDestructOptions = document.getElementById('selfDestructOptions');
+        const enableSelfDestruct = document.getElementById('enableSelfDestruct');
+        const selfDestructSettings = document.getElementById('selfDestructSettings');
+        const pgnMetadataOptions = document.getElementById('pgnMetadataOptions');
+        const toggleMetadata = document.getElementById('toggleMetadata');
+        const pgnMetadataSettings = document.getElementById('pgnMetadataSettings');
+        const randomizeMetadata = document.getElementById('randomizeMetadata');
+        const clearMetadata = document.getElementById('clearMetadata');
+        const presetLinks = document.querySelectorAll('.preset-dropdown-content a');
+
+        // Initialize action when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            // Set default radio button
+            if (!encodeRadio.checked && !decodeRadio.checked) {
+                encodeRadio.checked = true;
+            }
+            
+            // Show/hide options based on selected action
+            updateOptionsVisibility();
+        });
+
+        // Toggle options based on action selection
+        encodeRadio.addEventListener('change', updateOptionsVisibility);
+        decodeRadio.addEventListener('change', updateOptionsVisibility);
+
+        function updateOptionsVisibility() {
+            if (encodeRadio.checked) {
+                selfDestructOptions.style.display = 'block';
+                pgnMetadataOptions.style.display = 'block';
+            } else {
+                selfDestructOptions.style.display = 'none';
+                pgnMetadataOptions.style.display = 'none';
+                enableSelfDestruct.checked = false;
+                selfDestructSettings.style.display = 'none';
+            }
+        }
+
+        // Toggle self-destruct settings based on checkbox
+        enableSelfDestruct.addEventListener('change', () => {
+            selfDestructSettings.style.display = enableSelfDestruct.checked ? 'block' : 'none';
+        });
+
+        // Toggle metadata settings
+        toggleMetadata.addEventListener('click', () => {
+            const isVisible = pgnMetadataSettings.style.display === 'block';
+            pgnMetadataSettings.style.display = isVisible ? 'none' : 'block';
+            toggleMetadata.innerHTML = isVisible ? '<i class="fas fa-chevron-down"></i>' : '<i class="fas fa-chevron-up"></i>';
+        });
+
+        // Chess player names for randomization
+        const famousPlayers = [
+            { name: "Magnus Carlsen", elo: "2835" },
+            { name: "Ding Liren", elo: "2788" },
+            { name: "Fabiano Caruana", elo: "2792" },
+            { name: "Ian Nepomniachtchi", elo: "2789" },
+            { name: "Hikaru Nakamura", elo: "2787" },
+            { name: "Alireza Firouzja", elo: "2785" },
+            { name: "Wesley So", elo: "2780" },
+            { name: "Anish Giri", elo: "2769" },
+            { name: "Levon Aronian", elo: "2765" },
+            { name: "Teimour Radjabov", elo: "2747" }
+        ];
+
+        // Tournament names for randomization
+        const tournaments = [
+            "FIDE Grand Prix",
+            "Tata Steel Chess",
+            "Norway Chess",
+            "Sinquefield Cup",
+            "London Chess Classic",
+            "Candidates Tournament",
+            "Grand Chess Tour",
+            "World Chess Championship",
+            "Chess Olympiad",
+            "Wijk aan Zee"
+        ];
+
+        // Locations for randomization
+        const locations = [
+            "Moscow, RUS",
+            "New York, USA",
+            "London, ENG",
+            "Berlin, GER",
+            "Paris, FRA",
+            "Dubai, UAE",
+            "Shanghai, CHN",
+            "Madrid, ESP",
+            "Amsterdam, NED",
+            "Oslo, NOR"
+        ];
+
+        // ECO codes for randomization
+        const ecoCodes = ["A00", "B27", "C13", "D31", "E04", "B90", "C45", "D43", "E61", "A40"];
+
+        // Randomize metadata
+        randomizeMetadata.addEventListener('click', () => {
+            const today = new Date();
+            const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+            
+            const white = famousPlayers[Math.floor(Math.random() * famousPlayers.length)];
+            let black;
+            do {
+                black = famousPlayers[Math.floor(Math.random() * famousPlayers.length)];
+            } while (black.name === white.name);
+            
+            document.getElementById('pgn_event').value = tournaments[Math.floor(Math.random() * tournaments.length)];
+            document.getElementById('pgn_site').value = locations[Math.floor(Math.random() * locations.length)];
+            document.getElementById('pgn_date').value = formattedDate;
+            document.getElementById('pgn_round').value = Math.floor(Math.random() * 7) + 1;
+            document.getElementById('pgn_white').value = white.name;
+            document.getElementById('pgn_black').value = black.name;
+            document.getElementById('pgn_whiteelo').value = white.elo;
+            document.getElementById('pgn_blackelo').value = black.elo;
+            document.getElementById('pgn_eco').value = ecoCodes[Math.floor(Math.random() * ecoCodes.length)];
+            
+            const resultOptions = ["*", "1-0", "0-1", "1/2-1/2"];
+            const randomResult = resultOptions[Math.floor(Math.random() * resultOptions.length)];
+            document.getElementById('pgn_result').value = randomResult;
+        });
+
+        // Clear all metadata fields
+        clearMetadata.addEventListener('click', () => {
+            const metadataFields = document.querySelectorAll('.metadata-field input, .metadata-field select');
+            metadataFields.forEach(field => {
+                field.value = '';
+            });
+            document.getElementById('pgn_result').value = '*';
+        });
+
+        // Load presets
+        presetLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const preset = e.target.getAttribute('data-preset');
+                loadPreset(preset);
+            });
+        });
+
+        function loadPreset(preset) {
+            const today = new Date();
+            const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+            
+            switch(preset) {
+                case 'worldchampionship':
+                    document.getElementById('pgn_event').value = 'World Chess Championship';
+                    document.getElementById('pgn_site').value = 'Dubai, UAE';
+                    document.getElementById('pgn_date').value = formattedDate;
+                    document.getElementById('pgn_round').value = '7';
+                    document.getElementById('pgn_white').value = 'Magnus Carlsen';
+                    document.getElementById('pgn_black').value = 'Ding Liren';
+                    document.getElementById('pgn_whiteelo').value = '2835';
+                    document.getElementById('pgn_blackelo').value = '2788';
+                    document.getElementById('pgn_result').value = '*';
+                    document.getElementById('pgn_eco').value = 'C42';
+                    break;
+                case 'candidates':
+                    document.getElementById('pgn_event').value = 'FIDE Candidates Tournament';
+                    document.getElementById('pgn_site').value = 'Madrid, ESP';
+                    document.getElementById('pgn_date').value = formattedDate;
+                    document.getElementById('pgn_round').value = '4';
+                    document.getElementById('pgn_white').value = 'Ian Nepomniachtchi';
+                    document.getElementById('pgn_black').value = 'Fabiano Caruana';
+                    document.getElementById('pgn_whiteelo').value = '2789';
+                    document.getElementById('pgn_blackelo').value = '2792';
+                    document.getElementById('pgn_result').value = '1/2-1/2';
+                    document.getElementById('pgn_eco').value = 'B33';
+                    break;
+                case 'grandprix':
+                    document.getElementById('pgn_event').value = 'FIDE Grand Prix';
+                    document.getElementById('pgn_site').value = 'Berlin, GER';
+                    document.getElementById('pgn_date').value = formattedDate;
+                    document.getElementById('pgn_round').value = '2';
+                    document.getElementById('pgn_white').value = 'Hikaru Nakamura';
+                    document.getElementById('pgn_black').value = 'Wesley So';
+                    document.getElementById('pgn_whiteelo').value = '2787';
+                    document.getElementById('pgn_blackelo').value = '2780';
+                    document.getElementById('pgn_result').value = '1-0';
+                    document.getElementById('pgn_eco').value = 'D37';
+                    break;
+                case 'online':
+                    document.getElementById('pgn_event').value = 'Chess.com Global Championship';
+                    document.getElementById('pgn_site').value = 'Internet Chess Club';
+                    document.getElementById('pgn_date').value = formattedDate;
+                    document.getElementById('pgn_round').value = '3';
+                    document.getElementById('pgn_white').value = 'Anish Giri';
+                    document.getElementById('pgn_black').value = 'Alireza Firouzja';
+                    document.getElementById('pgn_whiteelo').value = '2769';
+                    document.getElementById('pgn_blackelo').value = '2785';
+                    document.getElementById('pgn_result').value = '0-1';
+                    document.getElementById('pgn_eco').value = 'E20';
+                    break;
+            }
+        }
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('drag-active');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('drag-active');
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            fileInput.files = files;
+            updateFileName(files[0]);
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            updateFileName(e.target.files[0]);
+        });
+
+        function updateFileName(file) {
+            if (file) {
+                fileLabel.textContent = file.name;
+                fileLabel.classList.add('file-selected');
+            } else {
+                fileLabel.textContent = 'No file selected';
+                fileLabel.classList.remove('file-selected');
+            }
+        }
+
+        // This is the modified section of the form submission handler
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = form.querySelector('.submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Processing...</span>';
+
+    try {
+        const formData = new FormData(form);
+        const action = form.querySelector('input[name="action"]:checked').value;
+        const fileType = form.querySelector('input[name="file_type"]:checked').value;
+        
+        // Add self-destruct timer data if enabled, but NOT as part of PGN headers
+        if (action === "encode" && enableSelfDestruct.checked) {
+            const hours = parseInt(document.getElementById('destructHours').value) || 0;
+            const minutes = parseInt(document.getElementById('destructMinutes').value) || 0;
+            const seconds = parseInt(document.getElementById('destructSeconds').value) || 0;
+            
+            // Calculate total seconds for self-destruct timer
+            const totalDestructSeconds = (hours * 3600) + (minutes * 60) + seconds;
+            
+            // Add as a separate form field rather than a PGN header
+            formData.append('self_destruct_timer', totalDestructSeconds);
+            
+            // Set a flag to indicate this is using the hidden expiry feature
+            formData.append('use_hidden_expiry', 'true');
+        }
+        
+        // Add PGN metadata if encrypting (excluding expiry times)
+        if (action === "encode") {
+            const metadataFields = document.querySelectorAll('.metadata-field input, .metadata-field select');
+            metadataFields.forEach(field => {
+                if (field.value) {
+                    formData.append(field.name, field.value);
+                }
+            });
+        }
+        
+        const url = action === "encode" ? "{{ url_for('handle_encode') }}" : "{{ url_for('handle_decode') }}";
+
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = action === "encode" ? "encrypted_file.pgn" :
+                       fileType === "text" ? "decrypted_file.txt" : "decrypted_file.png";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            
+            // Display message if self-destruct was enabled
+            if (action === "encode" && enableSelfDestruct.checked) {
+                const hours = parseInt(document.getElementById('destructHours').value) || 0;
+                const minutes = parseInt(document.getElementById('destructMinutes').value) || 0;
+                const seconds = parseInt(document.getElementById('destructSeconds').value) || 0;
+                
+                // Create a notification message about the self-destruct timer
+                const notification = document.createElement('div');
+                notification.className = 'notification success-notification';
+                notification.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <div class="notification-content">
+                        <h3>File Encrypted Successfully</h3>
+                        <p>Your file has been encrypted with a hidden self-destruct timer of ${hours} hours, ${minutes} minutes, and ${seconds} seconds.</p>
+                        <p class="note">The expiry time is not visible in the PGN headers for added security.</p>
+                    </div>
+                    <button class="close-notification"><i class="fas fa-times"></i></button>
+                `;
+                document.body.appendChild(notification);
+                
+                // Auto-remove the notification after 10 seconds
+                setTimeout(() => {
+                    notification.classList.add('fade-out');
+                    setTimeout(() => notification.remove(), 500);
+                }, 10000);
+                
+                // Close button functionality
+                notification.querySelector('.close-notification').addEventListener('click', () => {
+                    notification.classList.add('fade-out');
+                    setTimeout(() => notification.remove(), 500);
+                });
+            } else {
+                // Standard success notification
+                const notification = document.createElement('div');
+                notification.className = 'notification success-notification';
+                notification.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <div class="notification-content">
+                        <h3>${action === "encode" ? "File Encrypted Successfully" : "File Decrypted Successfully"}</h3>
+                        <p>Your file has been ${action === "encode" ? "encrypted" : "decrypted"} and downloaded automatically.</p>
+                    </div>
+                    <button class="close-notification"><i class="fas fa-times"></i></button>
+                `;
+                document.body.appendChild(notification);
+                
+                // Auto-remove the notification after 7 seconds
+                setTimeout(() => {
+                    notification.classList.add('fade-out');
+                    setTimeout(() => notification.remove(), 500);
+                }, 7000);
+                
+                // Close button functionality
+                notification.querySelector('.close-notification').addEventListener('click', () => {
+                    notification.classList.add('fade-out');
+                    setTimeout(() => notification.remove(), 500);
+                });
+            }
+        } else {
+            const errorData = await response.json();
+            
+            // Error notification
+            const notification = document.createElement('div');
+            notification.className = 'notification error-notification';
+            notification.innerHTML = `
+                <i class="fas fa-exclamation-circle"></i>
+                <div class="notification-content">
+                    <h3>Error Processing File</h3>
+                    <p>${errorData.error || 'Something went wrong. Please try again.'}</p>
+                </div>
+                <button class="close-notification"><i class="fas fa-times"></i></button>
+            `;
+            document.body.appendChild(notification);
+            
+            // Auto-remove the notification after 7 seconds
+            setTimeout(() => {
+                notification.classList.add('fade-out');
+                setTimeout(() => notification.remove(), 500);
+            }, 7000);
+            
+            // Close button functionality
+            notification.querySelector('.close-notification').addEventListener('click', () => {
+                notification.classList.add('fade-out');
+                setTimeout(() => notification.remove(), 500);
+            });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        
+        // Network or unexpected error notification
+        const notification = document.createElement('div');
+        notification.className = 'notification error-notification';
+        notification.innerHTML = `
+            <i class="fas fa-exclamation-circle"></i>
+            <div class="notification-content">
+                <h3>Connection Error</h3>
+                <p>Failed to connect to the server. Please check your internet connection and try again.</p>
+            </div>
+            <button class="close-notification"><i class="fas fa-times"></i></button>
+        `;
+        document.body.appendChild(notification);
+        
+        // Auto-remove the notification after 7 seconds
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 500);
+        }, 7000);
+        
+        // Close button functionality
+        notification.querySelector('.close-notification').addEventListener('click', () => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 500);
+        });
+    } finally {
+        // Re-enable the submit button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-shield-alt"></i><span>Process File</span>';
+    }
+});
+
+        // Add notification styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .notification {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background-color: #2a2a2a;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                display: flex;
+                padding: 15px;
+                max-width: 400px;
+                z-index: 1000;
+                animation: slide-in 0.5s ease forwards;
+            }
+            
+            .notification i {
+                font-size: 24px;
+                margin-right: 15px;
+            }
+            
+            .success-notification i {
+                color: #4CAF50;
+            }
+            
+            .error-notification i {
+                color: #F44336;
+            }
+            
+            .notification-content {
+                flex: 1;
+            }
+            
+            .notification h3 {
+                margin: 0 0 5px 0;
+                font-size: 16px;
+                font-weight: 600;
+                color: white;
+            }
+            
+            .notification p {
+                margin: 0;
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.8);
+            }
+            
+            .notification p.note {
+                margin-top: 8px;
+                font-size: 13px;
+                font-style: italic;
+                color: rgba(255, 255, 255, 0.6);
+            }
+            
+            .close-notification {
+                background: none;
+                border: none;
+                color: rgba(255, 255, 255, 0.6);
+                cursor: pointer;
+                font-size: 14px;
+                padding: 0;
+                margin-left: 10px;
+                align-self: flex-start;
+            }
+            
+            .close-notification:hover {
+                color: white;
+            }
+            
+            .fade-out {
+                animation: fade-out 0.5s ease forwards;
+            }
+            
+            @keyframes slide-in {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes fade-out {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

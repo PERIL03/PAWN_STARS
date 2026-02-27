@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Crypt - Secure File Encryption</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="nav-container">
+        <div class="nav-content">
+            <a href="{{ url_for('index') }}" class="logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Chess Crypt Logo">
+            </a>
+            <div class="nav-links">
+                <a href="{{ url_for('home') }}">Home</a>
+                <a href="{{ url_for('file_upload') }}">Encrypt/Decrypt</a>
+                <a href="{{ url_for('preview') }}">Live Preview</a>
+                <a href="{{ url_for('visualizer') }}" class="active">Visualizer</a>
+                <a href="{{ url_for('about') }}">About Team</a>
+                <a href="{{ url_for('get_in_touch') }}">Contact</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Chess Crypt</h1>
+            <p>A revolutionary approach to file encryption using chess game notation. Secure your data with an innovative 
+               steganography method that transforms your files into seemingly innocent chess game records.</p>
+            <div class="hero-buttons">
+                <a href="{{ url_for('file_upload') }}" class="btn">Get Started</a>
+                <a href="{{ url_for('about') }}" class="btn btn-outline">Learn More</a>
+            </div>
+        </div>
+
+        <!-- Move the features section inside the hero section and align it to the right -->
+        <div class="features-right">
+            <div class="card">
+                <i class="fas fa-shield-alt"></i>
+                <h3>Secure Encryption</h3>
+                <p>Advanced encryption algorithm that converts your data into chess game notation, making it virtually 
+                   impossible to detect the presence of encrypted data.</p>
+            </div>
+            <div class="card">
+                <i class="fas fa-chess"></i>
+                <h3>Chess-Based Steganography</h3>
+                <p>Unique approach that hides your encrypted data within legitimate-looking chess game records.</p>
+            </div>
+            <div class="card">
+                <i class="fas fa-lock"></i>
+                <h3>Privacy First</h3>
+                <p>Your files never leave your device - all encryption and decryption happens locally in your browser.</p>
+            </div>
+        </div>
+    </section>
+</body>
+</html>
