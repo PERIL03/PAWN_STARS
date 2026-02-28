@@ -141,16 +141,3 @@ decode("output.pgn", "recovered.png")
 2. Replay each game: regenerate the shuffled move list, find the played move's index
 3. Convert indices back to bits → bytes → original file
 
-## Deploy on Render
-
-The repo includes a [Dockerfile](Dockerfile) and [render.yaml](render.yaml) for one-click deployment:
-
-1. Push to GitHub
-2. Go to [render.com](https://render.com) → **New +** → **Blueprint**
-3. Connect your repo — Render auto-configures from `render.yaml`
-
-Or manually: **New +** → **Web Service** → select **Docker** runtime → deploy.
-
-## License
-
-MIT
