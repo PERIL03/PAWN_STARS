@@ -5,20 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ROOKHIDE - Secure File Encryption</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="page-home preloading">
+    <div id="sitePreloader" class="site-preloader" role="status" aria-live="polite" aria-label="Loading ROOKHIDE">
+        <div class="site-preloader-inner">
+            <div class="preloader-mark">ROOKHIDE</div>
+            <p class="preloader-copy">Loading ROOKHIDE...</p>
+            <div class="preloader-track"><span></span></div>
+        </div>
+    </div>
     <nav class="nav-container">
         <div class="nav-content">
             <a href="{{ url_for('index') }}" class="logo">
-                <span style="font-size:1.4rem;font-weight:700;color:#e94560;">♟️ ROOKHIDE</span>
+                <img class="logo-img" src="{{ url_for('static', filename='images/rook_transparent-removebg-preview.png') }}" alt="ROOKHIDE logo" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+                <span class="logo-text logo-fallback">ROOKHIDE</span>
             </a>
-            <div class="nav-links">
-                <a href="{{ url_for('home') }}">Home</a>
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <div class="nav-links" id="siteNavLinks">
+                <a href="{{ url_for('home') }}" class="active">Home</a>
                 <a href="{{ url_for('file_upload') }}">Encrypt/Decrypt</a>
                 <a href="{{ url_for('preview') }}">Live Preview</a>
-                <a href="{{ url_for('visualizer') }}" class="active">Visualizer</a>
+                <a href="{{ url_for('visualizer') }}">Visualizer</a>
                 <a href="{{ url_for('about') }}">About Team</a>
                 <a href="{{ url_for('get_in_touch') }}">Contact</a>
             </div>
@@ -26,35 +35,115 @@
     </nav>
 
     <section class="hero">
-        <div class="hero-content">
+        <div class="hero-atmosphere" aria-hidden="true">
+            <div class="hero-logo-orb parallax" data-speed="0.06">
+                <img src="{{ url_for('static', filename='images/rook_transparent-removebg-preview.png') }}" alt="ROOKHIDE emblem" onerror="this.style.display='none';">
+            </div>
+            <span class="orb orb-b parallax" data-speed="0.13"></span>
+            <span class="orb orb-c parallax" data-speed="0.07"></span>
+        </div>
+        <div class="hero-content reveal">
             <h1>ROOKHIDE</h1>
-            <p>A revolutionary approach to file encryption using chess game notation. Secure your data with an innovative 
-               steganography method that transforms your files into seemingly innocent chess game records.</p>
+            <p>Secure file transformation using chess notation. Convert data into standard PGN format while preserving reliable decode behavior.</p>
             <div class="hero-buttons">
-                <a href="{{ url_for('file_upload') }}" class="btn">Get Started</a>
-                <a href="{{ url_for('about') }}" class="btn btn-outline">Learn More</a>
+                <a href="{{ url_for('file_upload') }}" class="btn">Open Tool</a>
+                <a href="{{ url_for('about') }}" class="btn btn-outline">About</a>
             </div>
         </div>
 
-        <!-- Move the features section inside the hero section and align it to the right -->
+        
         <div class="features-right">
-            <div class="card">
+            <div class="card reveal">
                 <i class="fas fa-shield-alt"></i>
                 <h3>Secure Encryption</h3>
                 <p>Advanced encryption algorithm that converts your data into chess game notation, making it virtually 
                    impossible to detect the presence of encrypted data.</p>
             </div>
-            <div class="card">
+            <div class="card reveal">
                 <i class="fas fa-chess"></i>
                 <h3>Chess-Based Steganography</h3>
                 <p>Unique approach that hides your encrypted data within legitimate-looking chess game records.</p>
             </div>
-            <div class="card">
+            <div class="card reveal">
                 <i class="fas fa-lock"></i>
                 <h3>Privacy First</h3>
                 <p>Your files never leave your device - all encryption and decryption happens locally in your browser.</p>
             </div>
         </div>
     </section>
+
+    <section class="home-metrics reveal" aria-label="ROOKHIDE metrics">
+        <div class="metric-card">
+            <span class="metric-value">232.9x</span>
+            <span class="metric-label">Average Rust Speedup</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-value">9.16x</span>
+            <span class="metric-label">Typical PGN Expansion</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-value">38/38</span>
+            <span class="metric-label">Core Tests Passing</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-value">100%</span>
+            <span class="metric-label">Local File Processing</span>
+        </div>
+    </section>
+
+    <section class="home-section reveal" aria-label="How it works">
+        <div class="section-heading">
+            <h2>How It Works</h2>
+            <p>A clear four-step workflow designed for reliable operation during live demonstrations.</p>
+        </div>
+        <div class="workflow-grid">
+            <article class="workflow-item">
+                <span class="step-tag">01</span>
+                <h3>Input</h3>
+                <p>Load a text or image file from your device.</p>
+            </article>
+            <article class="workflow-item">
+                <span class="step-tag">02</span>
+                <h3>Transform</h3>
+                <p>Apply adaptive compression and optional password protection.</p>
+            </article>
+            <article class="workflow-item">
+                <span class="step-tag">03</span>
+                <h3>Encode</h3>
+                <p>Convert the payload into valid chess PGN structure.</p>
+            </article>
+            <article class="workflow-item">
+                <span class="step-tag">04</span>
+                <h3>Decode</h3>
+                <p>Recover the original file with deterministic output.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="home-section reveal" aria-label="Use cases">
+        <div class="section-heading">
+            <h2>Practical Use Cases</h2>
+            <p>Built for research demonstrations, secure transfers, and technical presentations.</p>
+        </div>
+        <div class="usecase-grid">
+            <article class="usecase-card">
+                <h3>Hackathon Demonstrations</h3>
+                <p>Present a complete pipeline with measurable performance gains.</p>
+            </article>
+            <article class="usecase-card">
+                <h3>Security Prototyping</h3>
+                <p>Test metadata integrity, expiry behavior, and decode resilience.</p>
+            </article>
+            <article class="usecase-card">
+                <h3>Steganography Research</h3>
+                <p>Explore chess-format carriers with deterministic round-trip validation.</p>
+            </article>
+        </div>
+    </section>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous" defer></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous" defer></script>
+    <script src="https://unpkg.com/framer-motion@11/dist/framer-motion.js" crossorigin="anonymous" defer></script>
+    <script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/framer-showcase.js') }}" defer></script>
 </body>
 </html>

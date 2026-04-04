@@ -32,7 +32,7 @@ COPY --from=builder /tmp/wheels/ /tmp/wheels/
 RUN pip install --no-cache-dir /tmp/wheels/*.whl && rm -rf /tmp/wheels
 
 # Copy application code
-COPY app.py encode.py decode.py util.py ./
+COPY app.py encode.py decode.py ./
 COPY templates/ templates/
 COPY static/ static/
 

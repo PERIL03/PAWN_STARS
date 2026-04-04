@@ -7,12 +7,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let actionType = null;
     let fileType = null;
 
-    // File selection event listeners
     fileInputs.forEach(input => {
         input.addEventListener('change', function() {
             selectedFile = this.files[0];
             
-            // Determine action type and file type based on input
             if (input.closest('.Encode')) {
                 actionType = 'encode';
             } else if (input.closest('.Decode')) {
@@ -23,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Submit button click handler
     submitButton.addEventListener('click', async function(e) {
         e.preventDefault();
 

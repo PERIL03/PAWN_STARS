@@ -1,4 +1,4 @@
-/* Base styles and variables inherited from main CSS */
+
 :root {
     --primary-color: #1a1a2e;
     --secondary-color: #16213e;
@@ -147,7 +147,7 @@
     color: var(--text-light);
 }
 
-/* Scrollbar Styling */
+
 .moves-list::-webkit-scrollbar {
     width: 6px;
 }
@@ -166,7 +166,7 @@
     background: var(--accent-color);
 }
 
-/* File Upload Section */
+
 .file-upload {
     margin-bottom: 2rem;
     text-align: center;
@@ -199,7 +199,7 @@
     opacity: 0.8;
 }
 
-/* Responsive Design */
+
 @media (max-width: 1024px) {
     .visualizer-content {
         grid-template-columns: 1fr;

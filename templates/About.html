@@ -15,35 +15,39 @@
     <nav class="nav-container">
         <div class="nav-content">
             <a href="{{ url_for('index') }}" class="logo">
-                <span style="font-size:1.4rem;font-weight:700;color:#e94560;">♟️ ROOKHIDE</span>
+                <img class="logo-img" src="{{ url_for('static', filename='images/rook_transparent-removebg-preview.png') }}" alt="ROOKHIDE logo" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+                <span class="logo-text logo-fallback">ROOKHIDE</span>
             </a>
-            <div class="nav-links">
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <div class="nav-links" id="siteNavLinks">
                 <a href="{{ url_for('home') }}">Home</a>
                 <a href="{{ url_for('file_upload') }}">Encrypt/Decrypt</a>
                 <a href="{{ url_for('preview') }}">Live Preview</a>
-                <a href="{{ url_for('visualizer') }}" class="active">Visualizer</a>
-                <a href="{{ url_for('about') }}">About Team</a>
+                <a href="{{ url_for('visualizer') }}">Visualizer</a>
+                <a href="{{ url_for('about') }}" class="active">About Team</a>
                 <a href="{{ url_for('get_in_touch') }}">Contact</a>
             </div>
         </div>
     </nav>
 
-    <section class="team-section">
-        <div class="section-header">
+    <section class="team-section reveal">
+        <div class="section-header reveal">
             <h1>Meet Our Team</h1>
             <p>The brilliant minds behind ROOKHIDE</p>
         </div>
 
-        <div style="text-align:center;margin:2rem auto;">
-            <img src="https://res.cloudinary.com/dycjjaxsk/image/upload/v1772218242/WhatsApp_Image_2026-02-27_at_10.02.48_PM_q4enzq.jpg"
+        <div class="card reveal" style="text-align:center;margin:2rem auto;max-width:760px;">
+              <img src="{{ url_for('static', filename='images/WhatsApp Image 2026-04-03 at 11.13.45.jpeg') }}"
                  alt="Team ROOKHIDE"
-                 style="max-width:50%;width:50%;height:50%;border-radius:10%;box-shadow:0 8px 32px rgba(0,0,0,0.3);border:3px solid #e94560;object-fit: cover;margin: 1rem;">
+                 onerror="this.src='https://res.cloudinary.com/dycjjaxsk/image/upload/v1772218242/WhatsApp_Image_2026-02-27_at_10.02.48_PM_q4enzq.jpg'"
+                 style="max-width:90%;width:640px;height:auto;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);border:3px solid #e94560;object-fit: cover;margin: 1rem;">
         </div>
-        <div style="text-align:center; color: white;">
+        <div class="reveal" style="text-align:center; color: white;">
             <h1>ROOKHIDE Team</h1>
-            <h1>Rishav - Vishal - Pranay - Rishu</h1>
+            <h1>Anurag - Pranay - Rishu - Kartik</h1>
         </div>
     </section>
+    <script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
 </body>
 
 </html>

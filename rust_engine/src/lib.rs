@@ -6,12 +6,8 @@ use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
 use std::time::Instant;
 use std::collections::HashMap;
-use std::fmt::Write;
+const MAX_PLIES_PER_GAME: usize = 300;
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  SplitMix64 — ultra-fast deterministic PRNG
-//  1 add + 3 xorshifts + 2 multiplies per u64  (~10x faster than ChaCha8)
-// ══════════════════════════════════════════════════════════════════════════════
 
 struct SplitMix64 {
     state: u64,
@@ -32,16 +28,12 @@ impl SplitMix64 {
         z ^ (z >> 31)
     }
 
-    /// Lemire's nearly-divisionless bounded random [0, bound).
     #[inline(always)]
     fn next_bounded(&mut self, bound: usize) -> usize {
         ((self.next_u64() as u128 * bound as u128) >> 64) as usize
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  Inline Fisher-Yates with unsafe ptr::swap (no bounds checks)
-// ══════════════════════════════════════════════════════════════════════════════
 
 #[inline]
 fn fast_shuffle(slice: &mut [ChessMove], rng: &mut SplitMix64) {
@@ -50,14 +42,11 @@ fn fast_shuffle(slice: &mut [ChessMove], rng: &mut SplitMix64) {
     let ptr = slice.as_mut_ptr();
     for i in (1..len).rev() {
         let j = rng.next_bounded(i + 1);
+        debug_assert!(j <= i && i < len);
         unsafe { std::ptr::swap(ptr.add(i), ptr.add(j)); }
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  Compact move representation: u16 for zero-alloc comparison in hot loop
-//  Layout: [src_sq:6][dst_sq:6][promo:4] = 16 bits
-// ══════════════════════════════════════════════════════════════════════════════
 
 #[inline(always)]
 fn move_to_u16(m: &ChessMove) -> u16 {
@@ -74,9 +63,6 @@ fn move_to_u16(m: &ChessMove) -> u16 {
     (src << 10) | (dst << 4) | promo
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-//  UCI formatting — bulk-called AFTER encoding, never in hot loop
-// ──────────────────────────────────────────────────────────────────────────────
 
 #[inline]
 fn format_move_uci(m: &ChessMove) -> String {
@@ -99,20 +85,13 @@ fn format_move_uci(m: &ChessMove) -> String {
     s
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-//  SAN (Standard Algebraic Notation) — generated during PGN encode
-// ──────────────────────────────────────────────────────────────────────────────
 
-/// Generate SAN for a move WITHOUT check/checkmate suffix.
-/// Board must be the position BEFORE the move.
-/// `legal_moves` is the full set of legal moves (used for disambiguation).
 #[inline]
 fn san_base(board: &Board, m: ChessMove, legal_moves: &[ChessMove]) -> String {
     let src = m.get_source();
     let dst = m.get_dest();
     let piece = board.piece_on(src).expect("san_base: no piece on source");
 
-    // ─── Castling: king moves more than 1 file ──────────────────
     if piece == Piece::King {
         let fdiff = dst.get_file().to_index() as i32 - src.get_file().to_index() as i32;
         if fdiff > 1  { return "O-O".to_string(); }
@@ -131,7 +110,6 @@ fn san_base(board: &Board, m: ChessMove, legal_moves: &[ChessMove]) -> String {
             Piece::Knight => 'N', Piece::Bishop => 'B', Piece::Rook => 'R',
             Piece::Queen  => 'Q', Piece::King   => 'K', _ => unreachable!(),
         });
-        // Disambiguation: check if another piece of same type can reach same dest
         let mut same_file = false;
         let mut same_rank = false;
         let mut ambig = false;
@@ -172,7 +150,6 @@ fn san_base(board: &Board, m: ChessMove, legal_moves: &[ChessMove]) -> String {
     san
 }
 
-/// Append '+' (check) or '#' (checkmate) based on the board state AFTER the move.
 #[inline]
 fn append_check_suffix(san: &mut String, board_after: &Board) {
     if board_after.checkers().popcnt() > 0 {
@@ -181,7 +158,6 @@ fn append_check_suffix(san: &mut String, board_after: &Board) {
     }
 }
 
-/// Write a single PGN header line: [Key "Value"]\n
 #[inline]
 fn write_pgn_header(out: &mut String, key: &str, value: &str) {
     out.push('[');
@@ -191,23 +167,16 @@ fn write_pgn_header(out: &mut String, key: &str, value: &str) {
     out.push_str("\"]\n");
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-//  SAN → ChessMove parser (used by rust_decode_pgn)
-// ──────────────────────────────────────────────────────────────────────────────
 
-/// Parse a SAN string into a ChessMove given the board state and list of legal moves.
-/// Handles castling, disambiguation, captures, promotions, check/mate suffixes.
 #[inline]
 fn parse_san_move(board: &Board, san: &str, legal_moves: &[ChessMove]) -> Result<ChessMove, String> {
     let bytes = san.as_bytes();
-    // Strip check/mate suffixes (+, #)
     let mut len = bytes.len();
     while len > 0 && (bytes[len - 1] == b'+' || bytes[len - 1] == b'#') {
         len -= 1;
     }
     let s = &bytes[..len];
 
-    // ── Castling ──────────────────────────────────────────────────
     if s.starts_with(b"O-O-O") || s.starts_with(b"0-0-0") {
         for &m in legal_moves {
             let src = m.get_source();
@@ -227,7 +196,6 @@ fn parse_san_move(board: &Board, san: &str, legal_moves: &[ChessMove]) -> Result
         return Err(format!("No kingside castle for: {}", san));
     }
 
-    // ── Parse from RIGHT: promotion, destination ─────────────────
     let mut i = len;
     let mut promotion: Option<Piece> = None;
     if i >= 2 && s[i - 2] == b'=' {
@@ -242,10 +210,8 @@ fn parse_san_move(board: &Board, san: &str, legal_moves: &[ChessMove]) -> Result
     let dst_rank = (s[i - 1] - b'1') as usize;
     let dst_file = (s[i - 2] - b'a') as usize;
     i -= 2;
-    // Skip capture marker
     if i > 0 && s[i - 1] == b'x' { i -= 1; }
 
-    // ── Parse from LEFT: piece letter ────────────────────────────
     let mut j = 0usize;
     let piece = match s.first() {
         Some(b'N') => { j = 1; Piece::Knight }
@@ -256,7 +222,6 @@ fn parse_san_move(board: &Board, san: &str, legal_moves: &[ChessMove]) -> Result
         _ => Piece::Pawn,
     };
 
-    // ── Disambiguation (between piece letter and x/destination) ──
     let mut src_file: Option<usize> = None;
     let mut src_rank: Option<usize> = None;
     for &c in &s[j..i] {
@@ -264,7 +229,6 @@ fn parse_san_move(board: &Board, san: &str, legal_moves: &[ChessMove]) -> Result
         else if c >= b'1' && c <= b'8' { src_rank = Some((c - b'1') as usize); }
     }
 
-    // ── Find matching legal move ─────────────────────────────────
     let dst = Square::make_square(Rank::from_index(dst_rank), File::from_index(dst_file));
     for &m in legal_moves {
         if m.get_dest() != dst { continue; }
@@ -282,9 +246,6 @@ fn parse_san_move(board: &Board, san: &str, legal_moves: &[ChessMove]) -> Result
     Err(format!("No legal move matches SAN: {}", san))
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-//  Move sort key (v1/v2 backward compat only — v3 skips sort)
-// ──────────────────────────────────────────────────────────────────────────────
 
 #[inline(always)]
 fn move_sort_key(m: &ChessMove) -> u32 {
@@ -303,13 +264,7 @@ fn move_sort_key(m: &ChessMove) -> u32 {
     ((((sf * 8 + sr) * 8 + df) * 8 + dr) * 6) + p
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  Legal move generation — two paths
-// ══════════════════════════════════════════════════════════════════════════════
 
-/// v3: NO sort — chess crate's MoveGen order is deterministic for same Board.
-/// Saves ~300ns per position by eliminating sort of 20–30 elements.
-/// Uses unsafe fill to skip per-element bounds checks.
 #[inline]
 fn fill_legal_moves(board: &Board, buf: &mut Vec<ChessMove>) {
     buf.clear();
@@ -322,36 +277,31 @@ fn fill_legal_moves(board: &Board, buf: &mut Vec<ChessMove>) {
     unsafe { buf.set_len(count); }
 }
 
-/// v1/v2: sorted for backward compatibility
 #[inline]
 fn fill_sorted_legal_moves(board: &Board, buf: &mut Vec<ChessMove>) {
     fill_legal_moves(board, buf);
     buf.sort_unstable_by_key(|m| move_sort_key(m));
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  Direct bit I/O — eliminates the intermediate 8× bit-buffer allocation
-// ══════════════════════════════════════════════════════════════════════════════
 
-/// Read `count` bits (1–7) from byte slice at `bit_offset`, MSB-first.
-/// Requires ≥2 bytes of padding beyond the last data bit.
 #[inline(always)]
 fn read_bits(data: &[u8], bit_offset: usize, count: usize) -> usize {
     debug_assert!(count > 0 && count <= 8);
     let byte_idx = bit_offset >> 3;
     let bit_idx  = bit_offset & 7;
-    let hi = unsafe { *data.get_unchecked(byte_idx) } as u32;
-    let lo = unsafe { *data.get_unchecked(byte_idx + 1) } as u32;
+    if byte_idx + 1 >= data.len() {
+        return 0;
+    }
+    let hi = data[byte_idx] as u32;
+    let lo = data[byte_idx + 1] as u32;
     let word = (hi << 8) | lo;
     ((word >> (16 - bit_idx - count)) & ((1u32 << count) - 1)) as usize
 }
 
-/// Streaming bit writer — packs move indices directly into output bytes.
-/// Eliminates the all_bits Vec<u8> (8× memory savings for 1 MB decode).
 struct BitWriter {
     bytes: Vec<u8>,
-    current: u32,   // accumulator for partial byte
-    bit_count: u32,  // bits in current (0–7)
+    current: u32,
+    bit_count: u32,
     total_bits: usize,
 }
 
@@ -366,8 +316,6 @@ impl BitWriter {
         }
     }
 
-    /// Write `count` bits (1–7) from `value`, MSB-first, directly into output.
-    /// At most one byte emitted per call (since max accumulated = 7+7 = 14 < 16).
     #[inline(always)]
     fn write(&mut self, value: usize, count: usize) {
         let combined = (self.current << count) | (value as u32 & ((1u32 << count) - 1));
@@ -390,9 +338,6 @@ impl BitWriter {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-//  Parse UCI string → ChessMove
-// ──────────────────────────────────────────────────────────────────────────────
 
 #[inline]
 fn parse_uci(uci: &str) -> Result<ChessMove, String> {
@@ -428,13 +373,80 @@ fn floor_log2(n: usize) -> usize {
     (usize::BITS as usize) - 1 - (n.leading_zeros() as usize)
 }
 
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║  v3 ENCODE                                                               ║
-// ║  • No sort (saves ~300ns/move)                                           ║
-// ║  • Direct bit reading from padded bytes (no 8× bit buffer)               ║
-// ║  • Unsafe shuffle + fill (no bounds checks)                              ║
-// ║  • SplitMix64 PRNG                                                       ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
+#[inline(always)]
+fn derive_game_seed(root_seed: u64, game_number: u64) -> u64 {
+    let mixed = root_seed ^ game_number.wrapping_mul(0x9e3779b97f4a7c15);
+    let mut rng = SplitMix64::new(mixed);
+    (rng.next_u64() % 1_000_000) + 1
+}
+
+#[inline(always)]
+fn piece_value(piece: Piece) -> i32 {
+    match piece {
+        Piece::Pawn => 1,
+        Piece::Knight | Piece::Bishop => 3,
+        Piece::Rook => 5,
+        Piece::Queen => 9,
+        Piece::King => 0,
+    }
+}
+
+#[inline(always)]
+fn is_center_square(sq: Square) -> bool {
+    let f = sq.get_file().to_index();
+    let r = sq.get_rank().to_index();
+    (f == 3 || f == 4) && (r == 3 || r == 4)
+}
+
+#[inline]
+fn move_score(board: &Board, m: ChessMove) -> i32 {
+    let mut score: i32 = 0;
+
+    if let Some(piece) = board.piece_on(m.get_dest()) {
+        score += piece_value(piece) * 100;
+    }
+
+    let after = board.make_move_new(m);
+    if after.checkers().popcnt() > 0 {
+        score += 50;
+    }
+
+    if let Some(Piece::King) = board.piece_on(m.get_source()) {
+        let fdiff = m.get_dest().get_file().to_index() as i32
+            - m.get_source().get_file().to_index() as i32;
+        if fdiff.abs() > 1 {
+            score += 12;
+        }
+    }
+
+    if m.get_promotion().is_some() {
+        score += 80;
+    }
+
+    if is_center_square(m.get_dest()) {
+        score += 10;
+    }
+
+    score
+}
+
+#[inline]
+fn reduce_to_guided_candidates(board: &Board, moves: &mut Vec<ChessMove>) {
+    if moves.len() <= 1 {
+        return;
+    }
+
+    moves.sort_unstable_by(|a, b| {
+        let sa = move_score(board, *a);
+        let sb = move_score(board, *b);
+        sb.cmp(&sa).then_with(|| move_sort_key(a).cmp(&move_sort_key(b)))
+    });
+
+    let capacity = floor_log2(moves.len());
+    let top_k = std::cmp::max(2, 1usize << capacity);
+    moves.truncate(top_k);
+}
+
 
 #[pyfunction]
 fn rust_encode(file_bytes: Vec<u8>) -> PyResult<Vec<(u64, usize, Vec<String>)>> {
@@ -445,7 +457,6 @@ fn rust_encode(file_bytes: Vec<u8>) -> PyResult<Vec<(u64, usize, Vec<String>)>> 
     let start = Instant::now();
     let data_bits = file_bytes.len() * 8;
 
-    // Pad with 4 zero bytes so read_bits can safely read 2 bytes at any offset
     let mut data = Vec::with_capacity(file_bytes.len() + 4);
     data.extend_from_slice(&file_bytes);
     data.extend_from_slice(&[0u8; 4]);
@@ -498,7 +509,7 @@ fn rust_encode(file_bytes: Vec<u8>) -> PyResult<Vec<(u64, usize, Vec<String>)>> 
 
         if bit_idx >= data_bits { break; }
 
-        if board.status() != BoardStatus::Ongoing || current_moves.len() >= 150 {
+        if board.status() != BoardStatus::Ongoing || current_moves.len() >= MAX_PLIES_PER_GAME {
             game_results.push((seed, data_bits, std::mem::take(&mut current_moves)));
             current_moves = Vec::with_capacity(160);
             board = Board::default();
@@ -511,7 +522,6 @@ fn rust_encode(file_bytes: Vec<u8>) -> PyResult<Vec<(u64, usize, Vec<String>)>> 
         game_results.push((seed, data_bits, current_moves));
     }
 
-    // Bulk-convert ChessMove → UCI strings (outside hot loop)
     let results: Vec<(u64, usize, Vec<String>)> = game_results
         .into_iter()
         .map(|(s, b, moves)| {
@@ -521,7 +531,7 @@ fn rust_encode(file_bytes: Vec<u8>) -> PyResult<Vec<(u64, usize, Vec<String>)>> 
         .collect();
 
     let elapsed = start.elapsed();
-    let mps = if elapsed.as_secs_f64() > 0.0 { total_moves as f64 / elapsed.as_secs_f64() } else { f64::INFINITY };
+    let mps = if elapsed.as_nanos() > 0 { total_moves as f64 / elapsed.as_secs_f64() } else { f64::INFINITY };
     eprintln!(
         "[rust v3] Encoded {} bytes in {:.3}s — {} moves, {} games — {:.0} m/s",
         file_bytes.len(), elapsed.as_secs_f64(), total_moves, results.len(), mps,
@@ -529,18 +539,17 @@ fn rust_encode(file_bytes: Vec<u8>) -> PyResult<Vec<(u64, usize, Vec<String>)>> 
     Ok(results)
 }
 
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║  v3 ENCODE → PGN  (encode + SAN + PGN formatting in one Rust pass)      ║
-// ║  Eliminates the ~2.5 s Python PGN-wrapping bottleneck for 1 MB files.   ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 #[pyfunction]
-#[pyo3(signature = (file_bytes, engine="rust-v3", expiry_time=None, custom_headers=None))]
+#[pyo3(signature = (file_bytes, engine="rust-v3", expiry_time=None, custom_headers=None, deterministic_seed_root=None, engine_guided=false, opening_book_uci=None))]
 fn rust_encode_pgn(
     file_bytes: Vec<u8>,
     engine: &str,
     expiry_time: Option<i64>,
     custom_headers: Option<HashMap<String, String>>,
+    deterministic_seed_root: Option<u64>,
+    engine_guided: bool,
+    opening_book_uci: Option<Vec<String>>,
 ) -> PyResult<String> {
     if file_bytes.is_empty() {
         return Err(PyValueError::new_err("Input file is empty"));
@@ -550,7 +559,6 @@ fn rust_encode_pgn(
     let data_bits = file_bytes.len() * 8;
     let file_len = file_bytes.len();
 
-    // Pad with 4 zero bytes so read_bits can safely overshoot
     let mut data = Vec::with_capacity(file_len + 4);
     data.extend_from_slice(&file_bytes);
     data.extend_from_slice(&[0u8; 4]);
@@ -570,13 +578,44 @@ fn rust_encode_pgn(
             .unwrap_or_default()
             .as_nanos() as u64,
     );
-    let mut seed: u64 = (seed_rng.next_u64() % 1_000_000) + 1;
+    let mut game_counter: u64 = 1;
+    let mut seed: u64 = if let Some(root) = deterministic_seed_root {
+        derive_game_seed(root, game_counter)
+    } else {
+        (seed_rng.next_u64() % 1_000_000) + 1
+    };
     let mut move_rng = SplitMix64::new(seed);
     let mut total_moves: u64 = 0;
 
-    // ── Encode loop (mirrors rust_encode but collects SAN strings) ─────────
+    let opening_moves: Vec<ChessMove> = if let Some(opening) = opening_book_uci {
+        let mut out = Vec::with_capacity(opening.len());
+        for uci in opening {
+            out.push(parse_uci(&uci).map_err(PyValueError::new_err)?);
+        }
+        out
+    } else {
+        Vec::new()
+    };
+
+    if !opening_moves.is_empty() {
+        for &m in &opening_moves {
+            fill_legal_moves(&board, &mut legal_moves);
+            if !legal_moves.iter().any(|lm| *lm == m) {
+                return Err(PyValueError::new_err("Opening camouflage contains illegal move"));
+            }
+            let mut san = san_base(&board, m, &legal_moves);
+            board = board.make_move_new(m);
+            append_check_suffix(&mut san, &board);
+            cur_sans.push(san);
+            total_moves += 1;
+        }
+    }
+
     while bit_idx < data_bits {
         fill_legal_moves(&board, &mut legal_moves);
+        if engine_guided {
+            reduce_to_guided_candidates(&board, &mut legal_moves);
+        }
 
         if legal_moves.len() <= 1 {
             if let Some(&m) = legal_moves.first() {
@@ -590,8 +629,27 @@ fn rust_encode_pgn(
                 all_games.push((seed, std::mem::take(&mut cur_sans)));
                 cur_sans = Vec::with_capacity(160);
                 board = Board::default();
-                seed = (seed_rng.next_u64() % 1_000_000) + 1;
+                game_counter += 1;
+                seed = if let Some(root) = deterministic_seed_root {
+                    derive_game_seed(root, game_counter)
+                } else {
+                    (seed_rng.next_u64() % 1_000_000) + 1
+                };
                 move_rng = SplitMix64::new(seed);
+
+                if !opening_moves.is_empty() {
+                    for &m in &opening_moves {
+                        fill_legal_moves(&board, &mut legal_moves);
+                        if !legal_moves.iter().any(|lm| *lm == m) {
+                            return Err(PyValueError::new_err("Opening camouflage contains illegal move"));
+                        }
+                        let mut san = san_base(&board, m, &legal_moves);
+                        board = board.make_move_new(m);
+                        append_check_suffix(&mut san, &board);
+                        cur_sans.push(san);
+                        total_moves += 1;
+                    }
+                }
             }
             continue;
         }
@@ -610,12 +668,31 @@ fn rust_encode_pgn(
 
         if bit_idx >= data_bits { break; }
 
-        if board.status() != BoardStatus::Ongoing || cur_sans.len() >= 150 {
+        if board.status() != BoardStatus::Ongoing || cur_sans.len() >= MAX_PLIES_PER_GAME {
             all_games.push((seed, std::mem::take(&mut cur_sans)));
             cur_sans = Vec::with_capacity(160);
             board = Board::default();
-            seed = (seed_rng.next_u64() % 1_000_000) + 1;
+            game_counter += 1;
+            seed = if let Some(root) = deterministic_seed_root {
+                derive_game_seed(root, game_counter)
+            } else {
+                (seed_rng.next_u64() % 1_000_000) + 1
+            };
             move_rng = SplitMix64::new(seed);
+
+            if !opening_moves.is_empty() {
+                for &m in &opening_moves {
+                    fill_legal_moves(&board, &mut legal_moves);
+                    if !legal_moves.iter().any(|lm| *lm == m) {
+                        return Err(PyValueError::new_err("Opening camouflage contains illegal move"));
+                    }
+                    let mut san = san_base(&board, m, &legal_moves);
+                    board = board.make_move_new(m);
+                    append_check_suffix(&mut san, &board);
+                    cur_sans.push(san);
+                    total_moves += 1;
+                }
+            }
         }
     }
 
@@ -623,7 +700,6 @@ fn rust_encode_pgn(
         all_games.push((seed, cur_sans));
     }
 
-    // ── Format PGN ─────────────────────────────────────────────────────────
     let num_games = all_games.len();
     let mut pgn = String::with_capacity(total_moves as usize * 6 + num_games * 300);
     let data_bits_str = data_bits.to_string();
@@ -631,7 +707,6 @@ fn rust_encode_pgn(
     for (game_idx, (game_seed, sans)) in all_games.iter().enumerate() {
         if game_idx > 0 { pgn.push_str("\n\n"); }
 
-        // Seven Tag Roster + custom overrides
         let event  = headers.get("Event").map(|s| s.as_str()).unwrap_or("?");
         let site   = headers.get("Site").map(|s| s.as_str()).unwrap_or("?");
         let date   = headers.get("Date").map(|s| s.as_str()).unwrap_or("????.??.??");
@@ -664,17 +739,32 @@ fn rust_encode_pgn(
             write_pgn_header(&mut pgn, "ExpiryTime", &exp.to_string());
         }
 
-        pgn.push('\n'); // blank line between headers and move text
+        for (key, value) in headers {
+            let is_reserved = matches!(
+                key.as_str(),
+                "Event"
+                    | "Site"
+                    | "Date"
+                    | "Round"
+                    | "White"
+                    | "Black"
+                    | "Result"
+                    | "Seed"
+                    | "DataBits"
+                    | "Engine"
+                    | "ExpiryTime"
+            );
 
-        // Move text with move numbers + ~80-col wrapping
+            if !is_reserved {
+                write_pgn_header(&mut pgn, key, value);
+            }
+        }
+
+        pgn.push('\n');
+
         let mut col: usize = 0;
-        for (i, san) in sans.iter().enumerate() {
-            let is_white = i % 2 == 0;
-            let move_num = i / 2 + 1;
-            let num_w = if move_num < 10 { 1 }
-                        else if move_num < 100 { 2 }
-                        else if move_num < 1000 { 3 } else { 4 };
-            let tok_len = if is_white { num_w + 2 + san.len() } else { san.len() };
+        for san in sans.iter() {
+            let tok_len = san.len();
             let need = if col == 0 { tok_len } else { 1 + tok_len };
 
             if col > 0 && col + need > 80 {
@@ -683,14 +773,10 @@ fn rust_encode_pgn(
             }
             if col > 0 { pgn.push(' '); col += 1; }
 
-            if is_white {
-                let _ = write!(pgn, "{}. ", move_num);
-            }
             pgn.push_str(san);
             col += tok_len;
         }
 
-        // Result terminator
         let rlen = result.len();
         if col > 0 && col + 1 + rlen > 80 {
             pgn.push('\n');
@@ -701,7 +787,7 @@ fn rust_encode_pgn(
     }
 
     let elapsed = start.elapsed();
-    let mps = if elapsed.as_secs_f64() > 0.0 {
+    let mps = if elapsed.as_nanos() > 0 {
         total_moves as f64 / elapsed.as_secs_f64()
     } else { f64::INFINITY };
     eprintln!(
@@ -712,9 +798,6 @@ fn rust_encode_pgn(
     Ok(pgn)
 }
 
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║  DECODE — v1/v2/v3 dispatch with BitWriter (no intermediate bit Vec)     ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 #[pyfunction]
 #[pyo3(signature = (games, data_bits_count, version = 3))]
@@ -730,27 +813,26 @@ fn rust_decode(games: Vec<(u64, Vec<String>)>, data_bits_count: usize, version: 
 
     let start = Instant::now();
 
-    // Pre-parse all UCI → (ChessMove, u16 key)
     let parsed_games: Vec<(u64, Vec<(ChessMove, u16)>)> = games
         .iter()
-        .map(|(seed, moves_uci)| {
-            let parsed: Vec<(ChessMove, u16)> = moves_uci
+        .map(|(seed, moves_uci)| -> PyResult<(u64, Vec<(ChessMove, u16)>)> {
+            let parsed = moves_uci
                 .iter()
                 .map(|uci| {
-                    let m = parse_uci(uci).expect("Invalid UCI");
-                    (m, move_to_u16(&m))
+                    parse_uci(uci)
+                        .map(|m| (m, move_to_u16(&m)))
+                        .map_err(|e| PyValueError::new_err(format!("Invalid UCI '{}': {}", uci, e)))
                 })
-                .collect();
-            (*seed, parsed)
+                .collect::<PyResult<Vec<(ChessMove, u16)>>>()?;
+            Ok((*seed, parsed))
         })
-        .collect();
+        .collect::<PyResult<Vec<(u64, Vec<(ChessMove, u16)>)>>>()?;
 
     let mut writer = BitWriter::new(data_bits_count);
     let mut legal_moves: Vec<ChessMove> = Vec::with_capacity(256);
     let mut total_moves: u64 = 0;
 
     match version {
-        // ── v3: no sort + SplitMix64 (fastest) ──────────────────
         v if v >= 3 => {
             'v3: for (seed, moves) in &parsed_games {
                 let mut board = Board::default();
@@ -778,7 +860,6 @@ fn rust_decode(games: Vec<(u64, Vec<String>)>, data_bits_count: usize, version: 
                 }
             }
         }
-        // ── v2: sorted + SplitMix64 ─────────────────────────────
         2 => {
             'v2: for (seed, moves) in &parsed_games {
                 let mut board = Board::default();
@@ -806,7 +887,6 @@ fn rust_decode(games: Vec<(u64, Vec<String>)>, data_bits_count: usize, version: 
                 }
             }
         }
-        // ── v1: sorted + ChaCha8Rng (backward compat) ───────────
         _ => {
             'v1: for (seed, moves) in &parsed_games {
                 let mut board = Board::default();
@@ -844,7 +924,7 @@ fn rust_decode(games: Vec<(u64, Vec<String>)>, data_bits_count: usize, version: 
 
     let bytes = writer.into_bytes();
     let elapsed = start.elapsed();
-    let mps = if elapsed.as_secs_f64() > 0.0 { total_moves as f64 / elapsed.as_secs_f64() } else { f64::INFINITY };
+    let mps = if elapsed.as_nanos() > 0 { total_moves as f64 / elapsed.as_secs_f64() } else { f64::INFINITY };
     eprintln!(
         "[rust] Decoded {} bytes in {:.3}s — {} moves — {:.0} m/s (v{})",
         bytes.len(), elapsed.as_secs_f64(), total_moves, mps, version,
@@ -852,9 +932,6 @@ fn rust_decode(games: Vec<(u64, Vec<String>)>, data_bits_count: usize, version: 
     Ok(bytes)
 }
 
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║  PGN TEXT PARSER — parse raw PGN string into (headers, SAN tokens)       ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 struct PgnGame<'a> {
     headers: HashMap<String, String>,
@@ -875,8 +952,6 @@ fn parse_pgn_header_line(line: &str) -> Option<(String, String)> {
     Some((key, value))
 }
 
-/// Parse a complete PGN text into a list of games.
-/// Each game has headers (HashMap) and a Vec of &str SAN tokens.
 fn parse_pgn_text(text: &str) -> Vec<PgnGame<'_>> {
     let mut games: Vec<PgnGame> = Vec::new();
     let mut headers = HashMap::new();
@@ -890,7 +965,6 @@ fn parse_pgn_text(text: &str) -> Vec<PgnGame<'_>> {
             continue;
         }
         if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            // New header line — if we were collecting move text, finalize previous game
             if !in_headers && (!headers.is_empty() || !san_moves.is_empty()) {
                 games.push(PgnGame {
                     headers: std::mem::take(&mut headers),
@@ -904,10 +978,8 @@ fn parse_pgn_text(text: &str) -> Vec<PgnGame<'_>> {
         } else {
             in_headers = false;
             for token in trimmed.split_whitespace() {
-                // Skip move numbers: "1.", "12.", "1..."
                 if token.ends_with('.') { continue; }
                 if token.bytes().all(|b| b.is_ascii_digit() || b == b'.') { continue; }
-                // Skip result tokens
                 if token == "*" || token == "1-0" || token == "0-1" || token == "1/2-1/2" {
                     continue;
                 }
@@ -915,17 +987,12 @@ fn parse_pgn_text(text: &str) -> Vec<PgnGame<'_>> {
             }
         }
     }
-    // Final game
     if !headers.is_empty() || !san_moves.is_empty() {
         games.push(PgnGame { headers, san_moves });
     }
     games
 }
 
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║  DECODE from PGN text — PGN parse + SAN→move + bit extraction in Rust   ║
-// ║  Eliminates the ~90 s Python PGN-parsing bottleneck for 1 MB files.     ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 #[pyfunction]
 fn rust_decode_pgn(pgn_text: &str) -> PyResult<(Vec<u8>, HashMap<String, String>)> {
@@ -955,21 +1022,52 @@ fn rust_decode_pgn(pgn_text: &str) -> PyResult<(Vec<u8>, HashMap<String, String>
         _ => 3,
     };
 
+    let engine_guided = first_headers
+        .get("EngineGuided")
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+
+    let opening_moves: Vec<ChessMove> = if let Some(opening) = first_headers.get("OpeningBookUCI") {
+        let mut parsed_opening = Vec::new();
+        for token in opening.split_whitespace() {
+            parsed_opening.push(parse_uci(token).map_err(PyValueError::new_err)?);
+        }
+        parsed_opening
+    } else {
+        Vec::new()
+    };
+
     let mut writer = BitWriter::new(data_bits_count);
     let mut legal_moves: Vec<ChessMove> = Vec::with_capacity(256);
     let mut total_moves: u64 = 0;
 
     match version {
-        // ── v3: no sort + SplitMix64 ─────────────────────────────
         v if v >= 3 => {
             'v3p: for game in &parsed {
                 let seed: u64 = game.headers.get("Seed")
                     .and_then(|s| s.parse().ok()).unwrap_or(1);
                 let mut board = Board::default();
                 let mut move_rng = SplitMix64::new(seed);
+                let mut opening_index = 0usize;
 
                 for san in &game.san_moves {
+                    if opening_index < opening_moves.len() {
+                        fill_legal_moves(&board, &mut legal_moves);
+                        total_moves += 1;
+                        let target = parse_san_move(&board, san, &legal_moves)
+                            .map_err(|e| PyValueError::new_err(e))?;
+                        if move_to_u16(&target) != move_to_u16(&opening_moves[opening_index]) {
+                            return Err(PyValueError::new_err("Opening camouflage mismatch"));
+                        }
+                        board = board.make_move_new(target);
+                        opening_index += 1;
+                        continue;
+                    }
+
                     fill_legal_moves(&board, &mut legal_moves);
+                    if engine_guided {
+                        reduce_to_guided_candidates(&board, &mut legal_moves);
+                    }
                     total_moves += 1;
 
                     if legal_moves.len() <= 1 {
@@ -997,7 +1095,6 @@ fn rust_decode_pgn(pgn_text: &str) -> PyResult<(Vec<u8>, HashMap<String, String>
                 }
             }
         }
-        // ── v2: sorted + SplitMix64 ──────────────────────────────
         2 => {
             'v2p: for game in &parsed {
                 let seed: u64 = game.headers.get("Seed")
@@ -1034,7 +1131,6 @@ fn rust_decode_pgn(pgn_text: &str) -> PyResult<(Vec<u8>, HashMap<String, String>
                 }
             }
         }
-        // ── v1: sorted + ChaCha8Rng ──────────────────────────────
         _ => {
             'v1p: for game in &parsed {
                 let seed: u64 = game.headers.get("Seed")
@@ -1081,7 +1177,7 @@ fn rust_decode_pgn(pgn_text: &str) -> PyResult<(Vec<u8>, HashMap<String, String>
 
     let bytes = writer.into_bytes();
     let elapsed = start.elapsed();
-    let mps = if elapsed.as_secs_f64() > 0.0 {
+    let mps = if elapsed.as_nanos() > 0 {
         total_moves as f64 / elapsed.as_secs_f64()
     } else { f64::INFINITY };
     eprintln!(
@@ -1092,9 +1188,6 @@ fn rust_decode_pgn(pgn_text: &str) -> PyResult<(Vec<u8>, HashMap<String, String>
     Ok((bytes, first_headers))
 }
 
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║  BENCHMARK                                                               ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 #[pyfunction]
 fn benchmark(size_bytes: usize) -> PyResult<String> {
@@ -1114,8 +1207,16 @@ fn benchmark(size_bytes: usize) -> PyResult<String> {
 
     let ok = data == decoded;
     let moves: usize = games.iter().map(|(_, _, m)| m.len()).sum();
-    let enc_mps = moves as f64 / enc_t.as_secs_f64();
-    let dec_mps = moves as f64 / dec_t.as_secs_f64();
+    let enc_mps = if enc_t.as_nanos() > 0 {
+        moves as f64 / enc_t.as_secs_f64()
+    } else {
+        f64::INFINITY
+    };
+    let dec_mps = if dec_t.as_nanos() > 0 {
+        moves as f64 / dec_t.as_secs_f64()
+    } else {
+        f64::INFINITY
+    };
 
     Ok(format!(
         "Benchmark: {} bytes\n\
@@ -1133,9 +1234,6 @@ fn benchmark(size_bytes: usize) -> PyResult<String> {
     ))
 }
 
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║  PyO3 MODULE                                                             ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 #[pymodule]
 fn chess_engine(m: &Bound<'_, PyModule>) -> PyResult<()> {

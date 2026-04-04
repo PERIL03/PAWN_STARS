@@ -5,20 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Encrypt/Decrypt Files - ROOKHIDE</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="page-file preloading">
+    <div id="sitePreloader" class="site-preloader" role="status" aria-live="polite" aria-label="Loading ROOKHIDE">
+        <div class="site-preloader-inner">
+            <div class="preloader-mark">ROOKHIDE</div>
+            <p class="preloader-copy">Loading ROOKHIDE...</p>
+            <div class="preloader-track"><span></span></div>
+        </div>
+    </div>
     <nav class="nav-container">
         <div class="nav-content">
             <a href="{{ url_for('index') }}" class="logo">
-                <span style="font-size:1.4rem;font-weight:700;color:#e94560;">♟️ ROOKHIDE</span>
+                <img class="logo-img" src="{{ url_for('static', filename='images/rook_transparent-removebg-preview.png') }}" alt="ROOKHIDE logo" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+                <span class="logo-text logo-fallback">ROOKHIDE</span>
             </a>
-            <div class="nav-links">
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <div class="nav-links" id="siteNavLinks">
                 <a href="{{ url_for('home') }}">Home</a>
-                <a href="{{ url_for('file_upload') }}">Encrypt/Decrypt</a>
+                <a href="{{ url_for('file_upload') }}" class="active">Encrypt/Decrypt</a>
                 <a href="{{ url_for('preview') }}">Live Preview</a>
-                <a href="{{ url_for('visualizer') }}" class="active">Visualizer</a>
+                <a href="{{ url_for('visualizer') }}">Visualizer</a>
                 <a href="{{ url_for('about') }}">About Team</a>
                 <a href="{{ url_for('get_in_touch') }}">Contact</a>
             </div>
@@ -26,11 +35,16 @@
     </nav>
 
     <div class="upload-container">
-        <div class="upload-section">
+        <div class="upload-section reveal">
             <div class="section-header">
                 <h2>File Encryption Tool</h2>
                 <p class="section-description">Secure your files using advanced chess-based steganography</p>
+                <div id="modeBadge" class="mode-badge mode-fast">
+                    <i class="fas fa-bolt"></i>
+                    <span id="modeBadgeText">Rust Fast Mode active</span>
+                </div>
             </div>
+            <div id="framerUploadMount" class="framer-upload-mount"></div>
 
             <form id="uploadForm" class="upload-form" method="POST" enctype="multipart/form-data">
                 <div class="options-container">
@@ -85,8 +99,27 @@
                             </label>
                         </div>
                     </div>
+
+                    <div class="option-group security-group">
+                        <h3><i class="fas fa-key"></i> AES-GCM Security</h3>
+                        <div class="security-field">
+                            <label for="encryptionPassword">Password (optional for encryption)</label>
+                            <input
+                                type="password"
+                                id="encryptionPassword"
+                                name="encryption_password"
+                                minlength="8"
+                                maxlength="128"
+                                autocomplete="new-password"
+                                placeholder="Minimum 8 characters"
+                            >
+                            <p id="encryptionHelp" class="security-help">
+                                Leave empty to encode without password. Provide the same password during decode for encrypted files.
+                            </p>
+                        </div>
+                    </div>
                     
-                    <!-- Self-Destruct Timer Options -->
+                    
                     <div id="selfDestructOptions" class="option-group" style="display: none;">
                         <h3><i class="fas fa-bomb"></i> Self-Destruct Timer</h3>
                         <div class="checkbox-container">
@@ -117,7 +150,7 @@
                         </div>
                     </div>
                     
-                    <!-- PGN Metadata Options -->
+                    
                     <div id="pgnMetadataOptions" class="option-group" style="display: none;">
                         <h3><i class="fas fa-chess"></i> PGN Metadata <button type="button" id="toggleMetadata" class="toggle-btn"><i class="fas fa-chevron-down"></i></button></h3>
                         <p class="metadata-description">Customize chess game headers to make encrypted files look authentic</p>
@@ -191,6 +224,7 @@
                             </div>
                         </div>
                     </div>
+
                 </div>
 
                 <div class="file-upload-container">
@@ -263,6 +297,36 @@
             color: #ff6b6b;
             font-size: 14px;
             font-style: italic;
+        }
+
+        .security-group .security-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .security-group label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .security-group input {
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .security-group input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .security-help {
+            margin: 0;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.68);
         }
         
         /* PGN Metadata Styles */
@@ -355,6 +419,37 @@
         .preset-dropdown:hover .preset-dropdown-content {
             display: block;
         }
+
+        .mode-badge {
+            margin: 10px auto 0;
+            width: fit-content;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+        }
+
+        .mode-fast {
+            background: rgba(124, 252, 152, 0.14);
+            color: #7cfc98;
+            border-color: rgba(124, 252, 152, 0.45);
+        }
+
+        .mode-safe {
+            background: rgba(255, 209, 102, 0.12);
+            color: #ffd166;
+            border-color: rgba(255, 209, 102, 0.45);
+        }
+
+        .mode-decode {
+            background: rgba(117, 201, 255, 0.12);
+            color: #75c9ff;
+            border-color: rgba(117, 201, 255, 0.45);
+        }
         
         @media (max-width: 768px) {
             .metadata-grid {
@@ -367,6 +462,11 @@
         }
     </style>
 
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous" defer></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous" defer></script>
+    <script src="https://unpkg.com/framer-motion@11/dist/framer-motion.js" crossorigin="anonymous" defer></script>
+    <script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/framer-showcase.js') }}" defer></script>
     <script>
         const fileInput = document.getElementById('fileInput');
         const fileLabel = document.querySelector('.selected-file');
@@ -383,6 +483,9 @@
         const randomizeMetadata = document.getElementById('randomizeMetadata');
         const clearMetadata = document.getElementById('clearMetadata');
         const presetLinks = document.querySelectorAll('.preset-dropdown-content a');
+        const modeBadge = document.getElementById('modeBadge');
+        const modeBadgeText = document.getElementById('modeBadgeText');
+        const encryptionHelp = document.getElementById('encryptionHelp');
 
         // Initialize action when page loads
         window.addEventListener('DOMContentLoaded', () => {
@@ -393,6 +496,7 @@
             
             // Show/hide options based on selected action
             updateOptionsVisibility();
+            updateModeBadge();
         });
 
         // Toggle options based on action selection
@@ -403,12 +507,28 @@
             if (encodeRadio.checked) {
                 selfDestructOptions.style.display = 'block';
                 pgnMetadataOptions.style.display = 'block';
+                encryptionHelp.textContent = 'Leave empty to encode without password. Provide the same password during decode for encrypted files.';
             } else {
                 selfDestructOptions.style.display = 'none';
                 pgnMetadataOptions.style.display = 'none';
                 enableSelfDestruct.checked = false;
                 selfDestructSettings.style.display = 'none';
+                encryptionHelp.textContent = 'Enter the password used during encryption to decode AES-GCM protected payloads.';
             }
+            updateModeBadge();
+        }
+
+        function updateModeBadge() {
+            modeBadge.classList.remove('mode-fast', 'mode-safe', 'mode-decode');
+
+            if (!encodeRadio.checked) {
+                modeBadge.classList.add('mode-decode');
+                modeBadgeText.textContent = 'Decode uses Rust engine when available';
+                return;
+            }
+
+            modeBadge.classList.add('mode-fast');
+            modeBadgeText.textContent = 'Rust Fast Mode active';
         }
 
         // Toggle self-destruct settings based on checkbox
@@ -648,6 +768,9 @@ form.addEventListener('submit', async (e) => {
         if (action === "encode") {
             const metadataFields = document.querySelectorAll('.metadata-field input, .metadata-field select');
             metadataFields.forEach(field => {
+                if ((field.type === 'checkbox' || field.type === 'radio') && !field.checked) {
+                    return;
+                }
                 if (field.value) {
                     formData.append(field.name, field.value);
                 }
@@ -662,6 +785,21 @@ form.addEventListener('submit', async (e) => {
         });
 
         if (response.ok) {
+            const compressionUsed = response.headers.get('X-Compression-Used') === 'true';
+            const sourceBytes = parseInt(response.headers.get('X-Source-Bytes') || '0', 10);
+            const payloadBytes = parseInt(response.headers.get('X-Payload-Bytes') || '0', 10);
+            const expansionBytes = parseInt(response.headers.get('X-Expansion-Bytes') || '0', 10);
+            const expansionRatio = parseFloat(response.headers.get('X-Expansion-Ratio') || '1');
+            const savedBytes = Math.max(0, sourceBytes - payloadBytes);
+            const savedPct = sourceBytes > 0 ? ((savedBytes / sourceBytes) * 100).toFixed(2) : '0.00';
+            const expansionRatioText = Number.isFinite(expansionRatio) ? expansionRatio.toFixed(2) : '1.00';
+            const compressionLevel = response.headers.get('X-Compression-Level') || '9';
+            const encryptionUsed = response.headers.get('X-Encryption-Used') === 'true';
+            const deterministicSeed = response.headers.get('X-Deterministic-Seed') === 'true';
+            const engineGuidedUsed = response.headers.get('X-Engine-Guided') === 'true';
+            const openingUsed = response.headers.get('X-Opening-Camouflage') === 'true';
+            const rustPathUsed = response.headers.get('X-Rust-Path') === 'true';
+
             const blob = await response.blob();
             const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -686,6 +824,15 @@ form.addEventListener('submit', async (e) => {
                     <div class="notification-content">
                         <h3>File Encrypted Successfully</h3>
                         <p>Your file has been encrypted with a hidden self-destruct timer of ${hours} hours, ${minutes} minutes, and ${seconds} seconds.</p>
+                        ${compressionUsed
+                            ? `<p class="note">Compression level ${compressionLevel}: reduced payload by ${savedBytes} bytes (${savedPct}%).</p>`
+                            : '<p class="note">Compression not applied (file already compact).</p>'}
+                        ${encryptionUsed ? '<p class="note">AES-GCM encryption enabled (password-protected payload).</p>' : ''}
+                        ${deterministicSeed ? '<p class="note">Seed mode: deterministic (password-derived).</p>' : ''}
+                        ${engineGuidedUsed ? '<p class="note">Engine-guided selection active.</p>' : ''}
+                        ${openingUsed ? '<p class="note">Opening-book camouflage active.</p>' : ''}
+                        <p class="note">Encoding path: ${rustPathUsed ? 'Rust accelerated' : 'Python compatible mode'}.</p>
+                        <p class="note">Final PGN size: ${expansionBytes} bytes (${expansionRatioText}x of original).</p>
                         <p class="note">The expiry time is not visible in the PGN headers for added security.</p>
                     </div>
                     <button class="close-notification"><i class="fas fa-times"></i></button>
@@ -712,6 +859,17 @@ form.addEventListener('submit', async (e) => {
                     <div class="notification-content">
                         <h3>${action === "encode" ? "File Encrypted Successfully" : "File Decrypted Successfully"}</h3>
                         <p>Your file has been ${action === "encode" ? "encrypted" : "decrypted"} and downloaded automatically.</p>
+                        ${action === "encode"
+                            ? (compressionUsed
+                                ? `<p class="note">Compression level ${compressionLevel}: reduced payload by ${savedBytes} bytes (${savedPct}%).</p>`
+                                : '<p class="note">Compression not applied (file already compact).</p>')
+                            : ''}
+                        ${action === "encode" && encryptionUsed ? '<p class="note">AES-GCM encryption enabled (password-protected payload).</p>' : ''}
+                        ${action === "encode" && deterministicSeed ? '<p class="note">Seed mode: deterministic (password-derived).</p>' : ''}
+                        ${action === "encode" && engineGuidedUsed ? '<p class="note">Engine-guided selection active.</p>' : ''}
+                        ${action === "encode" && openingUsed ? '<p class="note">Opening-book camouflage active.</p>' : ''}
+                        ${action === "encode" ? `<p class="note">Encoding path: ${rustPathUsed ? 'Rust accelerated' : 'Python compatible mode'}.</p>` : ''}
+                        ${action === "encode" ? `<p class="note">Final PGN size: ${expansionBytes} bytes (${expansionRatioText}x of original).</p>` : ''}
                     </div>
                     <button class="close-notification"><i class="fas fa-times"></i></button>
                 `;
@@ -730,7 +888,26 @@ form.addEventListener('submit', async (e) => {
                 });
             }
         } else {
-            const errorData = await response.json();
+            let errorMessage = 'Something went wrong. Please try again.';
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+            if (contentType.includes('application/json')) {
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch (parseError) {
+                    console.error('Failed to parse JSON error response:', parseError);
+                }
+            } else {
+                try {
+                    const errorText = (await response.text() || '').trim();
+                    if (errorText) {
+                        errorMessage = errorText;
+                    }
+                } catch (textError) {
+                    console.error('Failed to parse text error response:', textError);
+                }
+            }
             
             // Error notification
             const notification = document.createElement('div');
@@ -739,7 +916,7 @@ form.addEventListener('submit', async (e) => {
                 <i class="fas fa-exclamation-circle"></i>
                 <div class="notification-content">
                     <h3>Error Processing File</h3>
-                    <p>${errorData.error || 'Something went wrong. Please try again.'}</p>
+                    <p>${errorMessage}</p>
                 </div>
                 <button class="close-notification"><i class="fas fa-times"></i></button>
             `;

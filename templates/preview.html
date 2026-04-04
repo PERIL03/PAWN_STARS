@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chess Steganography Visualizer - ROOKHIDE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -87,8 +88,20 @@
 
         /* Responsive Navigation */
         @media (max-width: 768px) {
+            .menu-toggle {
+                display: inline-flex;
+            }
+
             .nav-links {
                 display: none;
+                width: 100%;
+                flex-direction: column;
+                margin-top: 0.5rem;
+                gap: 0.5rem;
+            }
+
+            .nav-links.open {
+                display: flex;
             }
         }
 
@@ -240,6 +253,27 @@
             transform: translateY(-2px);
         }
 
+        button:disabled {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.65);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button:disabled:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: none;
+        }
+
+        .btn-pause {
+            background-color: #f2a93b;
+            color: #1a1a1a;
+        }
+
+        .btn-pause:hover {
+            background-color: #d5922f;
+        }
+
         .btn-reset {
             background-color: #f44336;
         }
@@ -385,9 +419,11 @@
     <nav class="nav-container">
         <div class="nav-content">
             <a href="/" class="logo">
-                <span style="font-size:1.4rem;font-weight:700;color:#e94560;">♟️ ROOKHIDE</span>
+                <img class="logo-img" src="{{ url_for('static', filename='images/rook_transparent-removebg-preview.png') }}" alt="ROOKHIDE logo" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+                <span class="logo-text logo-fallback">ROOKHIDE</span>
             </a>
-            <div class="nav-links">
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <div class="nav-links" id="siteNavLinks">
                 <a href="/">Home</a>
                 <a href="/file_upload">Encrypt/Decrypt</a>
                 <a href="/preview" class="active">Live Preview</a>
@@ -397,7 +433,7 @@
             </div>
         </div>
     </nav>
-    <div class="container">
+    <div class="container reveal">
         <h1>Chess Steganography Visualizer</h1>
 
         <div class="upload-section">
@@ -422,7 +458,8 @@
                 <span id="speedValue">300ms</span>
             </div>
 
-            <button id="startVisualization">Start Visualization</button>
+            <button id="startVisualization">Play Visualization</button>
+            <button id="pauseVisualization" class="btn-pause" disabled>Pause Visualization</button>
             <button id="resetVisualization" class="btn-reset">Reset</button>
 
             <div class="encoding-progress">
@@ -477,6 +514,7 @@
         </div>
     </div>
 
+    <script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
     <script>
         let board = null;
         let chess = new Chess();
@@ -488,6 +526,42 @@
         let moveCount = 0;
         let processingSpeed = 300;
         let processingInterval = null;
+        let isProcessing = false;
+        let loadedFileKey = null;
+
+        function getFileKey(file) {
+            return `${file.name}:${file.size}:${file.lastModified || 0}`;
+        }
+
+        function updatePlaybackButtons() {
+            const fileInput = document.getElementById('fileInput');
+            const hasSelectedFile = !!(fileInput && fileInput.files && fileInput.files.length > 0);
+            const hasActiveBuffer = totalBits > 0 && currentBitIndex < totalBits;
+            const canPlay = hasActiveBuffer || hasSelectedFile;
+
+            $('#startVisualization').prop('disabled', !canPlay || isProcessing);
+            $('#pauseVisualization').prop('disabled', !isProcessing);
+        }
+
+        function stopProcessing() {
+            if (processingInterval) {
+                clearInterval(processingInterval);
+                processingInterval = null;
+            }
+            isProcessing = false;
+            updatePlaybackButtons();
+        }
+
+        function startProcessing() {
+            if (isProcessing || totalBits === 0 || currentBitIndex >= totalBits) {
+                updatePlaybackButtons();
+                return;
+            }
+            stopProcessing();
+            processingInterval = setInterval(processNextMove, processingSpeed);
+            isProcessing = true;
+            updatePlaybackButtons();
+        }
 
         // Initialize the chess board
         function initializeBoard() {
@@ -508,10 +582,7 @@
 
         // Reset everything
         function resetVisualization() {
-            if (processingInterval) {
-                clearInterval(processingInterval);
-                processingInterval = null;
-            }
+            stopProcessing();
 
             chess.reset();
             if (board) {
@@ -524,14 +595,21 @@
             totalBits = 0;
             gameCount = 0;
             moveCount = 0;
+            loadedFileKey = null;
 
             updateStats();
             updateProgress(0);
+            updatePlaybackButtons();
 
             $('#movesList').html('');
             $('#fileInfo').html('<p>No file selected</p>');
             $('#encodingInfo').html('<p>Waiting to start...</p>');
             $('#binaryView').html('<p>Binary data will appear here</p>');
+
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.value = '';
+            }
         }
 
         // Update the statistics display
@@ -540,8 +618,8 @@
             $('#moveCount').text(moveCount);
 
             if (totalBits > 0) {
-                const percent = Math.floor((currentBitIndex / totalBits) * 100);
-                $('#progressPercent').text(percent + '%');
+                const percent = (currentBitIndex / totalBits) * 100;
+                $('#progressPercent').text(percent.toFixed(2) + '%');
             } else {
                 $('#progressPercent').text('0%');
             }
@@ -618,7 +696,7 @@
         // Process the next move in the encryption simulation
         function processNextMove() {
             if (currentBitIndex >= totalBits) {
-                clearInterval(processingInterval);
+                stopProcessing();
                 $('#encodingInfo').html('<p><strong>Encoding complete!</strong></p>');
                 updateProgress(100);
                 return;
@@ -678,7 +756,7 @@
             currentBitIndex += bitsToEncode;
 
             // Update progress
-            const progressPercent = Math.floor((currentBitIndex / totalBits) * 100);
+            const progressPercent = (currentBitIndex / totalBits) * 100;
             updateProgress(progressPercent);
             updateStats();
 
@@ -691,6 +769,37 @@
             }
         }
 
+        function initializeLoadedFile(file, fileType, arrayBuffer) {
+            stopProcessing();
+
+            chess.reset();
+            if (board) {
+                board.position(chess.fen());
+            }
+
+            fileData = arrayBuffer;
+            fileByteArray = new Uint8Array(fileData);
+            totalBits = fileByteArray.length * 8;
+            currentBitIndex = 0;
+            gameCount = 1;
+            moveCount = 0;
+            loadedFileKey = getFileKey(file);
+
+            updateStats();
+            updateProgress(0);
+
+            $('#movesList').html('');
+            $('#encodingInfo').html('<p>Visualization initialized. Press Play to begin.</p>');
+            $('#binaryView').html('<p>Binary data will appear here</p>');
+            $('#fileInfo').html(`
+                <p><strong>File name:</strong> ${file.name}</p>
+                <p><strong>File size:</strong> ${file.size} bytes (${totalBits} bits)</p>
+                <p><strong>File type:</strong> ${fileType}</p>
+            `);
+
+            updatePlaybackButtons();
+        }
+
         // Start the visualization process
         function startVisualization() {
             const fileInput = document.getElementById('fileInput');
@@ -701,30 +810,25 @@
 
             const file = fileInput.files[0];
             const fileType = document.getElementById('fileTypeSelect').value;
+            const selectedKey = getFileKey(file);
+
+            if (loadedFileKey === selectedKey && fileData && currentBitIndex < totalBits) {
+                startProcessing();
+                return;
+            }
 
             const reader = new FileReader();
 
             reader.onload = function (e) {
-                resetVisualization();
-
-                fileData = e.target.result;
-
-                // Convert the file data to byte array
-                fileByteArray = new Uint8Array(fileData);
-                totalBits = fileByteArray.length * 8;
-
-                // Update file info display directly (no server request in standalone version)
-                $('#fileInfo').html(`
-                    <p><strong>File name:</strong> ${file.name}</p>
-                    <p><strong>File size:</strong> ${file.size} bytes (${totalBits} bits)</p>
-                    <p><strong>File type:</strong> ${fileType}</p>
-                `);
-
-                // Start processing at the specified interval
-                processingInterval = setInterval(processNextMove, processingSpeed);
+                initializeLoadedFile(file, fileType, e.target.result);
+                startProcessing();
             };
 
             reader.readAsArrayBuffer(file);
+        }
+
+        function pauseVisualization() {
+            stopProcessing();
         }
 
         // Initialize the UI when the page loads
@@ -733,7 +837,9 @@
 
             // Attach event handlers
             $('#startVisualization').on('click', startVisualization);
+            $('#pauseVisualization').on('click', pauseVisualization);
             $('#resetVisualization').on('click', resetVisualization);
+            $('#fileInput').on('change', updatePlaybackButtons);
 
             // Speed control
             $('#speedControl').on('input', function () {
@@ -741,11 +847,13 @@
                 $('#speedValue').text(processingSpeed + 'ms');
 
                 // Update the processing interval if active
-                if (processingInterval) {
-                    clearInterval(processingInterval);
-                    processingInterval = setInterval(processNextMove, processingSpeed);
+                if (isProcessing) {
+                    stopProcessing();
+                    startProcessing();
                 }
             });
+
+            updatePlaybackButtons();
         });
     </script>
 </body>

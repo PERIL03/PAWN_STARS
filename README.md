@@ -21,6 +21,10 @@ A steganography system that hides arbitrary files inside valid chess games. Data
 
 Throughput: ~1M moves/sec (encode), ~1.4M moves/sec (decode) on Apple Silicon.
 
+## Developer Documentation
+
+For architecture, data flow, and implementation details, see [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md).
+
 ## Tech Stack
 
 | Layer | Technology | Purpose |
@@ -38,7 +42,6 @@ Throughput: ~1M moves/sec (encode), ~1.4M moves/sec (decode) on Apple Silicon.
 ├── app.py                  # Flask web server
 ├── encode.py               # Encoding orchestration (dispatches to Rust or Python)
 ├── decode.py               # Decoding orchestration (dispatches to Rust or Python)
-├── util.py                 # Shared utilities
 ├── rust_engine/
 │   ├── Cargo.toml          # Rust dependencies (pyo3, chess, rand)
 │   ├── pyproject.toml      # maturin build config
@@ -60,7 +63,17 @@ Throughput: ~1M moves/sec (encode), ~1.4M moves/sec (decode) on Apple Silicon.
 ├── Dockerfile              # Multi-stage build (Rust + Python)
 ├── render.yaml             # Render deployment blueprint
 ├── requirements.txt        # Python dependencies
-├── build_rust.sh           # Local Rust build helper
+├── build_rust.sh           # Backward-compatible wrapper for Rust build helper
+├── scripts/
+│   ├── bootstrap.py        # Cross-platform venv + dependency bootstrap
+│   ├── bootstrap.sh        # POSIX wrapper for bootstrap
+│   ├── bootstrap.ps1       # PowerShell wrapper for bootstrap
+│   ├── build_rust.py       # Cross-platform Rust build helper
+│   ├── build_rust.ps1      # Windows PowerShell wrapper for Rust build
+│   ├── capture_responsive.py # Cross-platform responsive snapshot helper
+│   ├── capture-responsive.sh # Backward-compatible wrapper for snapshot helper
+│   ├── capture-responsive.ps1 # Windows PowerShell wrapper for snapshots
+│   └── run_server.py       # Cross-platform app launcher
 └── .gitignore
 ```
 
@@ -79,19 +92,66 @@ Throughput: ~1M moves/sec (encode), ~1.4M moves/sec (decode) on Apple Silicon.
 git clone https://github.com/<your-username>/rookhide.git
 cd rookhide
 
-# Build the Rust extension
-cd rust_engine
-maturin develop --release
-cd ..
+# Bootstrap virtualenv + dependencies
+python scripts/bootstrap.py
 
-# Install Python dependencies
-pip install -r requirements.txt
+# Build Rust extension (cross-platform helper)
+python scripts/build_rust.py
 
-# Run
-python app.py
+# Run (cross-platform launcher)
+python scripts/run_server.py
 ```
 
 The app will be available at `http://localhost:5000`.
+
+### Platform Notes (Windows / macOS / Linux)
+
+- Use `python -m pip ...` to ensure packages install into the active Python environment.
+- Rust toolchain installation: https://rustup.rs
+- One-command bootstrap wrappers:
+
+```bash
+# macOS/Linux
+bash scripts/bootstrap.sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+```
+
+```bash
+# Include Rust build during bootstrap
+python scripts/bootstrap.py --with-rust
+```
+
+- Rust build wrappers:
+
+```bash
+# macOS/Linux
+bash build_rust.sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File scripts/build_rust.ps1
+```
+
+- Snapshot automation is cross-platform:
+
+```bash
+python scripts/capture_responsive.py --base-url http://127.0.0.1:5000 --out-dir qa_snapshots
+```
+
+```bash
+# macOS/Linux wrapper
+bash scripts/capture-responsive.sh
+
+# Windows PowerShell wrapper
+powershell -ExecutionPolicy Bypass -File scripts/capture-responsive.ps1
+```
+
+- Production-style launch (non-Windows):
+
+```bash
+python scripts/run_server.py --production --host 0.0.0.0 --port 5000
+```
 
 ### Without Rust (pure-Python fallback)
 

@@ -2,4 +2,4 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-python3 "$SCRIPT_DIR/scripts/build_rust.py" "$@"
+python3 "$SCRIPT_DIR/bootstrap.py" "$@"

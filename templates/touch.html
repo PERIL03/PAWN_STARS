@@ -12,30 +12,31 @@
     <nav class="nav-container">
         <div class="nav-content">
             <a href="{{ url_for('index') }}" class="logo">
-                <span style="font-size:1.4rem;font-weight:700;color:#e94560;">♟️ ROOKHIDE</span>
+                <img class="logo-img" src="{{ url_for('static', filename='images/rook_transparent-removebg-preview.png') }}" alt="ROOKHIDE logo" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+                <span class="logo-text logo-fallback">ROOKHIDE</span>
             </a>
-            <div class="nav-links">
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <div class="nav-links" id="siteNavLinks">
                 <a href="{{ url_for('home') }}">Home</a>
                 <a href="{{ url_for('file_upload') }}">Encrypt/Decrypt</a>
                 <a href="{{ url_for('preview') }}">Live Preview</a>
-                <a href="{{ url_for('visualizer') }}" class="active">Visualizer</a>
+                <a href="{{ url_for('visualizer') }}">Visualizer</a>
                 <a href="{{ url_for('about') }}">About Team</a>
-                <a href="{{ url_for('get_in_touch') }}">Contact</a>
+                <a href="{{ url_for('get_in_touch') }}" class="active">Contact</a>
 
             </div>
         </div>
     </nav>
 
-    <section class="contact-section">
-        <div class="section-header">
+    <section class="contact-section reveal">
+        <div class="section-header reveal">
             <h1>Get in Touch</h1>
             <p>Have questions? We'd love to hear from you.</p>
         </div>
 
         <div class="contact-container">
-            <div class="contact-form card">
-                <form action="https://api.web3forms.com/submit" method="POST">
-                    <input type="hidden" name="access_key" value="20803485-7ad7-4096-8ac3-892f7353966d">
+            <div class="contact-form card reveal">
+                <form id="contactForm" action="{{ url_for('submit_contact') }}" method="POST">
                     
                     <div class="form-group">
                         <label for="name">Your Name</label>
@@ -52,14 +53,15 @@
                         <textarea id="message" name="message" class="form-control" rows="5" required></textarea>
                     </div>
 
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" id="contactSubmitBtn">
                         <i class="fas fa-paper-plane"></i>
                         Send Message
                     </button>
                 </form>
+                <p id="contactStatus" class="contact-status" aria-live="polite"></p>
             </div>
 
-            <div class="contact-info card">
+            <div class="contact-info card reveal">
                 <div class="info-item">
                     <i class="fas fa-envelope"></i>
                     <h3>Email Us</h3>
@@ -78,5 +80,48 @@
             </div>
         </div>
     </section>
+
+    <script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
+    <script>
+        const contactForm = document.getElementById('contactForm');
+        const contactSubmitBtn = document.getElementById('contactSubmitBtn');
+        const contactStatus = document.getElementById('contactStatus');
+
+        function setContactStatus(message, isError) {
+            contactStatus.textContent = message;
+            contactStatus.style.color = isError ? '#ff6b6b' : '#7CFC98';
+        }
+
+        contactForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const originalButtonHtml = contactSubmitBtn.innerHTML;
+            contactSubmitBtn.disabled = true;
+            contactSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            setContactStatus('', false);
+
+            try {
+                const formData = new FormData(contactForm);
+                const response = await fetch(contactForm.action, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    setContactStatus(payload.error || 'Unable to send message right now', true);
+                    return;
+                }
+
+                setContactStatus(payload.message || 'Message sent successfully', false);
+                contactForm.reset();
+            } catch (error) {
+                setContactStatus('Network error. Please try again.', true);
+            } finally {
+                contactSubmitBtn.disabled = false;
+                contactSubmitBtn.innerHTML = originalButtonHtml;
+            }
+        });
+    </script>
 </body>
 </html>
