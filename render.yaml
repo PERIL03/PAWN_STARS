@@ -12,3 +12,7 @@ services:
         value: "false"
       - key: FLASK_HOST
         value: "0.0.0.0"
+      - key: ROOKHIDE_EXPIRY_SIGNING_KEY
+        sync: false
+      - key: ROOKHIDE_ALLOW_UNSIGNED_EXPIRY
+        value: "false"

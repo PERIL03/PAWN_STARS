@@ -109,6 +109,49 @@ def run_benchmarks(sizes: list[int], repeats: int, include_rust: bool) -> list[d
     return results
 
 
+def append_python_projection(results: list[dict], project_above_kb: int) -> list[dict]:
+    """Append projected Python rows for sizes above threshold using measured throughput."""
+    py_rows = [r for r in results if r["mode"] == "python"]
+    if not py_rows:
+        return results
+
+    measured_throughputs = [r["throughput_kb_s"] for r in py_rows if r["throughput_kb_s"] > 0]
+    if not measured_throughputs:
+        return results
+
+    avg_py_throughput = mean(measured_throughputs)
+    size_to_row = {(r["size_bytes"], r["mode"]): r for r in results}
+    all_sizes = sorted({r["size_bytes"] for r in results})
+    threshold_bytes = project_above_kb * 1024
+
+    for size in all_sizes:
+        if size <= threshold_bytes:
+            continue
+        if (size, "python") in size_to_row:
+            continue
+
+        est_total = (size / 1024) / avg_py_throughput
+        est_row = {
+            "mode": "python",
+            "size_bytes": size,
+            "size_label": _format_size(size),
+            "repeats": 0,
+            "encode_s_mean": 0.0,
+            "decode_s_mean": 0.0,
+            "total_s_mean": est_total,
+            "expansion_ratio_mean": 0.0,
+            "throughput_kb_s": avg_py_throughput,
+            "ok": True,
+            "projected": True,
+        }
+        results.append(est_row)
+
+    for row in results:
+        row.setdefault("projected", False)
+
+    return results
+
+
 def save_csv(results: list[dict], out_csv: Path) -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     fields = [
@@ -122,6 +165,7 @@ def save_csv(results: list[dict], out_csv: Path) -> None:
         "expansion_ratio_mean",
         "throughput_kb_s",
         "ok",
+        "projected",
     ]
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
@@ -130,23 +174,42 @@ def save_csv(results: list[dict], out_csv: Path) -> None:
 
 
 def save_plots(results: list[dict], out_png: Path) -> None:
-    labels = sorted({r["size_label"] for r in results}, key=lambda x: float(x.split()[0]))
-    by_mode = {"python": [], "rust": []}
-    for mode in by_mode:
-        mode_rows = [r for r in results if r["mode"] == mode]
-        mode_rows.sort(key=lambda r: r["size_bytes"])
-        by_mode[mode] = mode_rows
+    by_mode = {
+        "python_measured": [],
+        "python_projected": [],
+        "rust": [],
+    }
+
+    for r in sorted(results, key=lambda row: row["size_bytes"]):
+        if r["mode"] == "rust":
+            by_mode["rust"].append(r)
+        elif r["mode"] == "python":
+            if r.get("projected"):
+                by_mode["python_projected"].append(r)
+            else:
+                by_mode["python_measured"].append(r)
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
 
-    for mode, color in (("python", "#f97316"), ("rust", "#22c55e")):
-        rows = by_mode[mode]
+    style_map = [
+        ("python_measured", "python (measured)", "#f97316", "-", "o"),
+        ("python_projected", "python (projected)", "#f59e0b", "--", "s"),
+        ("rust", "rust", "#22c55e", "-", "o"),
+    ]
+
+    for key, label, color, ls, marker in style_map:
+        rows = by_mode[key]
         if not rows:
             continue
         x = [r["size_bytes"] / 1024 for r in rows]
-        axes[0].plot(x, [r["total_s_mean"] for r in rows], marker="o", label=mode, color=color)
-        axes[1].plot(x, [r["throughput_kb_s"] for r in rows], marker="o", label=mode, color=color)
-        axes[2].plot(x, [r["expansion_ratio_mean"] for r in rows], marker="o", label=mode, color=color)
+        axes[0].plot(x, [r["total_s_mean"] for r in rows], marker=marker, linestyle=ls, label=label, color=color)
+        axes[1].plot(x, [r["throughput_kb_s"] for r in rows], marker=marker, linestyle=ls, label=label, color=color)
+
+        expansion_values = [r["expansion_ratio_mean"] if r["expansion_ratio_mean"] > 0 else None for r in rows]
+        x_exp = [xv for xv, ev in zip(x, expansion_values) if ev is not None]
+        y_exp = [ev for ev in expansion_values if ev is not None]
+        if y_exp:
+            axes[2].plot(x_exp, y_exp, marker=marker, linestyle=ls, label=label, color=color)
 
     axes[0].set_title("Total Time vs Input Size")
     axes[0].set_xlabel("Input Size (KB)")
@@ -180,7 +243,7 @@ def save_summary(results: list[dict], out_txt: Path) -> None:
     lines.append(f"Round-trip verification: {'PASS' if all_ok else 'FAIL'}")
 
     rust_rows = [r for r in results if r["mode"] == "rust"]
-    py_rows = [r for r in results if r["mode"] == "python"]
+    py_rows = [r for r in results if r["mode"] == "python" and not r.get("projected")]
 
     if rust_rows and py_rows:
         speedups = []
@@ -194,8 +257,9 @@ def save_summary(results: list[dict], out_txt: Path) -> None:
     lines.append("")
     lines.append("Per-size stats:")
     for r in sorted(results, key=lambda x: (x["size_bytes"], x["mode"])):
+        mode_label = r["mode"] + (" (projected)" if r.get("projected") else "")
         lines.append(
-            f"- {r['size_label']} | {r['mode']} | total={r['total_s_mean']:.4f}s | "
+            f"- {r['size_label']} | {mode_label} | total={r['total_s_mean']:.4f}s | "
             f"throughput={r['throughput_kb_s']:.2f} KB/s | expansion={r['expansion_ratio_mean']:.3f}x"
         )
 
@@ -213,6 +277,12 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--out-dir", default="outputs/benchmarks")
     parser.add_argument("--no-rust", action="store_true", help="Run only Python mode")
+    parser.add_argument(
+        "--project-python-above-kb",
+        type=int,
+        default=0,
+        help="If >0, project Python results above this size (KB) using measured Python throughput",
+    )
     args = parser.parse_args()
 
     sizes = _parse_sizes(args.sizes)
@@ -223,6 +293,8 @@ def main() -> int:
     out_txt = out_dir / f"engine_comparison_{stamp}.txt"
 
     results = run_benchmarks(sizes=sizes, repeats=args.repeats, include_rust=not args.no_rust)
+    if args.project_python_above_kb > 0:
+        results = append_python_projection(results, args.project_python_above_kb)
     save_csv(results, out_csv)
     save_plots(results, out_png)
     save_summary(results, out_txt)

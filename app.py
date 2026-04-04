@@ -4,6 +4,8 @@ import gzip
 import uuid
 import shutil
 import time
+from datetime import datetime
+from pathlib import Path
 from base64 import b64encode
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
@@ -12,6 +14,25 @@ from flask import Flask, request, render_template, send_file, jsonify, after_thi
 from werkzeug.utils import secure_filename
 from encode import encode, RUST_ENGINE_AVAILABLE as ENCODE_RUST_AVAILABLE
 from decode import decode
+
+
+def load_local_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_local_env_file(Path(__file__).resolve().parent / ".env")
+
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -167,8 +188,9 @@ def validate_custom_headers(headers: dict[str, str]) -> tuple[bool, str | None]:
             return False, f"Header {key} exceeds max length of {MAX_PGN_HEADER_LENGTH}"
 
         if key == "Date" and value:
-            parts = value.split('.')
-            if len(parts) != 3 or any(not p.isdigit() for p in parts):
+            try:
+                datetime.strptime(value, "%Y.%m.%d")
+            except ValueError:
                 return False, "Date header must use YYYY.MM.DD format"
 
         if key in {"WhiteElo", "BlackElo"} and value:
@@ -203,6 +225,21 @@ def validate_password(value: str | None) -> tuple[bool, str | None, str | None]:
     if len(password) > 128:
         return False, None, "Password must be at most 128 characters"
     return True, password, None
+
+
+def get_expiry_signing_secret() -> str | None:
+    secret = (os.getenv("ROOKHIDE_EXPIRY_SIGNING_KEY") or "").strip()
+    return secret or None
+
+
+def allow_unsigned_expiry_legacy() -> bool:
+    return (os.getenv("ROOKHIDE_ALLOW_UNSIGNED_EXPIRY", "false") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def require_expiry_signing_in_routes() -> bool:
+    if app.config.get("TESTING"):
+        return False
+    return True
 
 @app.route("/")
 def index():
@@ -274,7 +311,9 @@ def visualizer():
 
 @app.route("/health", methods=["GET"])
 def health():
-    free_mb = int(shutil.disk_usage(os.path.abspath(os.sep)).free / (1024 * 1024))
+    upload_free_mb = int(shutil.disk_usage(os.path.abspath(app.config['UPLOAD_FOLDER'])).free / (1024 * 1024))
+    output_free_mb = int(shutil.disk_usage(os.path.abspath(app.config['OUTPUT_FOLDER'])).free / (1024 * 1024))
+    free_mb = min(upload_free_mb, output_free_mb)
     status = "healthy"
 
     checks = {
@@ -305,13 +344,17 @@ def preview():
             file_type = request.form.get("file_type")
             if not file_type or file_type not in ['text', 'image']:
                 return jsonify({"error": "Invalid file type"}), 400
+
+            is_valid, validation_result = validate_upload(file, "encode", file_type)
+            if not is_valid:
+                return jsonify({"error": validation_result}), 400
             
             file_data = file.read()
             if len(file_data) == 0:
                 return jsonify({"error": "File is empty"}), 400
                 
             file_info = {
-                "filename": file.filename,
+                "filename": validation_result,
                 "size": len(file_data),
                 "file_type": file_type,
                 "bit_count": len(file_data) * 8,
@@ -332,6 +375,10 @@ def handle_encode():
     try:
         maybe_cleanup_stale_artifacts()
         app.logger.debug("Starting encode request")
+
+        signing_secret = get_expiry_signing_secret()
+        if require_expiry_signing_in_routes() and not signing_secret:
+            return jsonify({"error": "Server expiry signing key is not configured"}), 503
         
         if 'file' not in request.files:
             app.logger.error("No file part in request")
@@ -411,6 +458,7 @@ def handle_encode():
             self_destruct_timer,
             custom_headers if custom_headers else None,
             password=encryption_password,
+            expiry_signing_secret=signing_secret,
             compression_level=compression_level,
             engine_guided=engine_guided,
             opening_camouflage=opening_camouflage,
@@ -427,21 +475,10 @@ def handle_encode():
         with open(output_path, "rb") as pgn_file:
             pgn_bytes = pgn_file.read()
 
-        gzip_bytes = gzip.compress(pgn_bytes, compresslevel=9, mtime=0)
-        requested_format = (request.form.get("download_format") or "pgn").strip().lower()
-        requested_gzip = requested_format in {"gz", "gzip", "pgn.gz"}
-        use_gzip_delivery = requested_gzip and (len(gzip_bytes) + 32 < len(pgn_bytes))
         send_path = output_path
         download_name = "encoded_output.pgn"
         delivery_bytes = len(pgn_bytes)
-
-        if use_gzip_delivery:
-            delivery_path = build_unique_path(app.config['OUTPUT_FOLDER'], "encoded_output.pgn", forced_ext=".pgn.gz")
-            with open(delivery_path, "wb") as gz_file:
-                gz_file.write(gzip_bytes)
-            send_path = delivery_path
-            download_name = "encoded_output.pgn.gz"
-            delivery_bytes = len(gzip_bytes)
+        use_gzip_delivery = False
 
         safe_remove(input_path)
 
@@ -492,6 +529,10 @@ def handle_decode():
     try:
         maybe_cleanup_stale_artifacts()
         app.logger.debug("Starting decode request")
+
+        signing_secret = get_expiry_signing_secret()
+        if require_expiry_signing_in_routes() and not signing_secret:
+            return jsonify({"error": "Server expiry signing key is not configured"}), 503
         
         if 'file' not in request.files:
             app.logger.error("No file part in request")
@@ -526,7 +567,13 @@ def handle_decode():
         output_path = build_unique_path(app.config['OUTPUT_FOLDER'], f"decoded_output.{output_extension}")
         app.logger.debug(f"Output path: {output_path}")
 
-        decode(input_path, output_path, password=encryption_password)
+        decode(
+            input_path,
+            output_path,
+            password=encryption_password,
+            expiry_signing_secret=signing_secret,
+            allow_unsigned_expiry=allow_unsigned_expiry_legacy(),
+        )
         app.logger.debug("Decoding completed")
 
         if not os.path.exists(output_path):
@@ -547,6 +594,14 @@ def handle_decode():
             elif len(magic) >= 12 and magic[:4] == b"RIFF" and magic[8:12] == b"WEBP":
                 download_extension = "webp"
             else:
+                download_extension = "bin"
+        elif file_type == "text":
+            with open(output_path, "rb") as decoded_file:
+                content = decoded_file.read()
+            try:
+                content.decode("utf-8")
+                download_extension = "txt"
+            except UnicodeDecodeError:
                 download_extension = "bin"
 
         safe_remove(input_path)

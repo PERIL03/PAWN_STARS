@@ -20,6 +20,21 @@ def str_to_bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def load_local_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def run_gunicorn(host: str, port: int, workers: int) -> int:
     cmd = [
         sys.executable,
@@ -48,6 +63,8 @@ def main() -> int:
     project_root = Path(__file__).resolve().parents[1]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
+
+    load_local_env_file(project_root / ".env")
 
     debug_env = str_to_bool(os.getenv("FLASK_DEBUG", "false"))
     debug = args.debug or debug_env

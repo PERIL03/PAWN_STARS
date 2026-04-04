@@ -8,6 +8,7 @@ __pycache__/
 *.pyo
 *.egg-info/
 .venv/
+.env
 .ipynb_checkpoints/
 dist/
 *.whl

@@ -49,6 +49,52 @@ HIDDEN_METADATA_VERSION = 3
 HIDDEN_TRAILER_VERSION_AUTH_COMPACT = 4
 
 
+def build_expiry_signature(expiry_time: int, signing_secret: str) -> str:
+    message = f"rookhide-expiry-v1:{expiry_time}".encode("utf-8")
+    key = signing_secret.encode("utf-8")
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+
+def _enforce_expiry(
+    headers: dict[str, str],
+    expiry_signing_secret: str | None,
+    allow_unsigned_expiry: bool,
+) -> None:
+    expiry_raw = (headers.get("ExpiryTime") or "").strip()
+    expiry_signature = (headers.get("ExpirySignature") or "").strip()
+
+    if expiry_signature and not expiry_raw:
+        raise ValueError("Expiry metadata is invalid")
+
+    if not expiry_raw:
+        return
+
+    try:
+        expiry_time = int(expiry_raw)
+    except ValueError as exc:
+        raise ValueError("Invalid ExpiryTime header") from exc
+
+    if expiry_signing_secret:
+        if not expiry_signature:
+            if not allow_unsigned_expiry:
+                raise ValueError("Expiry metadata signature is missing")
+        else:
+            expected_signature = build_expiry_signature(expiry_time, expiry_signing_secret)
+            if not hmac.compare_digest(expiry_signature, expected_signature):
+                raise ValueError("Expiry metadata signature is invalid")
+
+    current_time = int(time())
+    if current_time > expiry_time:
+        time_diff = current_time - expiry_time
+        if time_diff < 60:
+            time_msg = f"{time_diff} seconds"
+        elif time_diff < 3600:
+            time_msg = f"{time_diff // 60} minutes"
+        else:
+            time_msg = f"{time_diff // 3600} hours"
+        raise ValueError(f"This file has expired {time_msg} ago and can no longer be decrypted")
+
+
 def safe_remove(path: str) -> None:
     try:
         os.remove(path)
@@ -252,22 +298,16 @@ except ImportError:
     logger.info("Rust chess engine not available — using pure-Python decode path")
 
 
-def _decode_with_rust(pgn_content: str, output_file_path: str, password: str | None) -> None:
+def _decode_with_rust(
+    pgn_content: str,
+    output_file_path: str,
+    password: str | None,
+    expiry_signing_secret: str | None,
+    allow_unsigned_expiry: bool,
+) -> None:
     decoded_bytes, headers = _rust.rust_decode_pgn(pgn_content)
 
-    if "ExpiryTime" in headers:
-        expiry_time = int(headers["ExpiryTime"])
-        current_time = int(time())
-        if current_time > expiry_time:
-            time_diff = current_time - expiry_time
-            if time_diff < 60:
-                time_msg = f"{time_diff} seconds"
-            elif time_diff < 3600:
-                time_msg = f"{time_diff // 60} minutes"
-            else:
-                time_msg = f"{time_diff // 3600} hours"
-            safe_remove(output_file_path)
-            raise ValueError(f"This file has expired {time_msg} ago and can no longer be decrypted")
+    _enforce_expiry(headers, expiry_signing_secret, allow_unsigned_expiry)
 
     output_bytes = bytes(decoded_bytes)
     output_bytes, used_envelope = decode_payload_envelope(output_bytes, password)
@@ -421,7 +461,33 @@ def _restore_legacy_whitespace_trailer(raw_lines: list[str], password: str | Non
             raise ValueError("Unsupported metadata authentication algorithm")
 
         if not hmac.compare_digest(auth_tag, expected_tag):
-            raise ValueError("Metadata authentication failed: file may be tampered")
+            # Backward compatibility: older compact encoders could sign a variant
+            # where Engine was included in every game's hidden headers.
+            alt_hidden_list: list[dict[str, str]] = []
+            if engine_value:
+                for item in hidden_list:
+                    alt_item = dict(item)
+                    alt_item["Engine"] = engine_value
+                    alt_hidden_list.append(alt_item)
+
+            if not alt_hidden_list:
+                raise ValueError("Metadata authentication failed: file may be tampered")
+
+            alt_msg = _metadata_auth_message(visible_pgn, alt_hidden_list)
+            if auth_alg_id == 1:
+                if not password:
+                    raise ValueError("Password is required to verify authenticated metadata")
+                key = _derive_metadata_auth_key(password)
+                alt_expected_tag = hmac.new(key, alt_msg, hashlib.sha256).digest()
+            elif auth_alg_id == 0:
+                alt_expected_tag = hashlib.sha256(alt_msg).digest()
+            else:
+                raise ValueError("Unsupported metadata authentication algorithm")
+
+            if not hmac.compare_digest(auth_tag, alt_expected_tag):
+                raise ValueError("Metadata authentication failed: file may be tampered")
+
+            hidden_list = alt_hidden_list
 
         return raw_lines[:-1], hidden_list
 
@@ -568,7 +634,13 @@ def restore_technical_headers_from_comment(pgn_content: str, password: str | Non
     return "\n\n".join(out_blocks).strip() + "\n"
 
 
-def decode(pgn_file_path: str, output_file_path: str, password: str | None = None) -> None:
+def decode(
+    pgn_file_path: str,
+    output_file_path: str,
+    password: str | None = None,
+    expiry_signing_secret: str | None = None,
+    allow_unsigned_expiry: bool = False,
+) -> None:
     try:
         if not os.path.exists(pgn_file_path):
             raise ValueError("Input PGN file does not exist")
@@ -593,7 +665,13 @@ def decode(pgn_file_path: str, output_file_path: str, password: str | None = Non
             raise ValueError("Input PGN file is empty")
 
         if RUST_ENGINE_AVAILABLE and is_rust_encoded_pgn(pgn_content) and rust_decode_supported(pgn_content):
-            _decode_with_rust(pgn_content, output_file_path, password)
+            _decode_with_rust(
+                pgn_content,
+                output_file_path,
+                password,
+                expiry_signing_secret,
+                allow_unsigned_expiry,
+            )
             return
 
         games = []
@@ -607,19 +685,7 @@ def decode(pgn_file_path: str, output_file_path: str, password: str | None = Non
         if not games:
             raise ValueError("No valid chess games found in PGN file")
 
-        current_time = int(time())
-        if "ExpiryTime" in games[0].headers:
-            expiry_time = int(games[0].headers.get("ExpiryTime"))
-            if current_time > expiry_time:
-                time_diff = current_time - expiry_time
-                if time_diff < 60:
-                    time_msg = f"{time_diff} seconds"
-                elif time_diff < 3600:
-                    time_msg = f"{time_diff // 60} minutes"
-                else:
-                    time_msg = f"{time_diff // 3600} hours"
-                safe_remove(output_file_path)
-                raise ValueError(f"This file has expired {time_msg} ago and can no longer be decrypted")
+        _enforce_expiry(games[0].headers, expiry_signing_secret, allow_unsigned_expiry)
 
         data_bits_count = None
         if "DataBits" in games[0].headers:

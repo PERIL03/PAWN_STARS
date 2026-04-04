@@ -54,6 +54,7 @@ HIDDEN_HEADER_KEYS = {
     "DataBits",
     "Engine",
     "ExpiryTime",
+    "ExpirySignature",
     "OpeningBookUCI",
     "EngineGuided",
     "SeedMode",
@@ -90,6 +91,12 @@ def read_input_file(file_path: str) -> bytes:
 def derive_root_seed(password: str) -> int:
     digest = hashlib.sha256(password.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big")
+
+
+def build_expiry_signature(expiry_time: int, signing_secret: str) -> str:
+    message = f"rookhide-expiry-v1:{expiry_time}".encode("utf-8")
+    key = signing_secret.encode("utf-8")
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
 
 
 def deterministic_game_seed(root_seed: int, game_number: int) -> int:
@@ -327,7 +334,19 @@ def _encode_hidden_whitespace_payload(
             if entries:
                 compact_body += struct.pack(f">{len(entries)}I", *entries)
 
-            msg = _metadata_auth_message(visible_pgn_text, hidden_list)
+            # Compact payload stores Engine once (first game only), so auth must
+            # be computed over the same canonical hidden-header representation.
+            auth_hidden_list: list[dict[str, str]] = []
+            for game_idx in range(count):
+                game_headers = {
+                    "Seed": str(entries[game_idx * 2]),
+                    "DataBits": str(entries[(game_idx * 2) + 1]),
+                }
+                if game_idx == 0 and engine_value:
+                    game_headers["Engine"] = engine_value
+                auth_hidden_list.append(game_headers)
+
+            msg = _metadata_auth_message(visible_pgn_text, auth_hidden_list)
             if password:
                 key = _derive_metadata_auth_key(password)
                 tag = hmac.new(key, msg, hashlib.sha256).digest()
@@ -477,6 +496,7 @@ def _encode_with_rust(
     self_destruct_timer: Optional[int] = None,
     custom_headers: Optional[Dict[str, str]] = None,
     password: Optional[str] = None,
+    expiry_signing_secret: Optional[str] = None,
     deterministic_seed_root: Optional[int] = None,
     engine_guided: bool = False,
     opening_book_uci: Optional[list[str]] = None,
@@ -490,11 +510,15 @@ def _encode_with_rust(
     if self_destruct_timer is not None and self_destruct_timer > 0:
         expiry_time = int(current_time()) + self_destruct_timer
 
+    effective_headers = dict(custom_headers) if custom_headers else {}
+    if expiry_time is not None and expiry_signing_secret:
+        effective_headers["ExpirySignature"] = build_expiry_signature(expiry_time, expiry_signing_secret)
+
     pgn_string = _rust.rust_encode_pgn(
         list(file_bytes),
         "rust-v3",
         expiry_time,
-        dict(custom_headers) if custom_headers else None,
+        effective_headers or None,
         deterministic_seed_root,
         engine_guided,
         opening_book_uci,
@@ -520,6 +544,7 @@ def encode(
     self_destruct_timer: Optional[int] = None,
     custom_headers: Optional[Dict[str, str]] = None,
     password: Optional[str] = None,
+    expiry_signing_secret: Optional[str] = None,
     compression_level: Optional[int] = None,
     engine_guided: bool = False,
     opening_camouflage: bool = False,
@@ -597,6 +622,7 @@ def encode(
             self_destruct_timer,
             effective_headers or None,
             password=password,
+            expiry_signing_secret=expiry_signing_secret,
             deterministic_seed_root=root_seed if deterministic_seed_mode else None,
             engine_guided=engine_guided,
             opening_book_uci=opening_sequence or None,
@@ -622,6 +648,8 @@ def encode(
             expiry_time = int(current_time()) + self_destruct_timer
             human_readable = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expiry_time))
             logger.debug("File will expire at: %s", human_readable)
+            if expiry_signing_secret:
+                effective_headers["ExpirySignature"] = build_expiry_signature(expiry_time, expiry_signing_secret)
 
         output_pgns: list[str] = []
         file_bit_index = 0

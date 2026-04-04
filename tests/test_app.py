@@ -63,6 +63,9 @@ class AppRoutesTests(unittest.TestCase):
         app.config["TESTING"] = True
         self.client = app.test_client()
 
+    def tearDown(self):
+        app.config["TESTING"] = False
+
     def test_health_endpoint(self):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
@@ -140,6 +143,63 @@ class AppRoutesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         payload = response.get_json()
         self.assertIn("at least 8", payload.get("error", ""))
+
+    def test_preview_rejects_invalid_extension_for_text_type(self):
+        response = self.client.post(
+            "/preview",
+            data={
+                "file_type": "text",
+                "file": (io.BytesIO(b"abc"), "sample.bin"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertIn("File type not allowed", payload.get("error", ""))
+
+    def test_encode_requires_expiry_signing_key_when_not_testing(self):
+        previous = os.environ.get("ROOKHIDE_EXPIRY_SIGNING_KEY")
+        try:
+            if "ROOKHIDE_EXPIRY_SIGNING_KEY" in os.environ:
+                del os.environ["ROOKHIDE_EXPIRY_SIGNING_KEY"]
+            app.config["TESTING"] = False
+            response = self.client.post(
+                "/encode",
+                data={
+                    "file_type": "text",
+                    "file": (io.BytesIO(b"abc"), "sample.txt"),
+                },
+                content_type="multipart/form-data",
+            )
+            self.assertEqual(response.status_code, 503)
+            payload = response.get_json()
+            self.assertIn("signing key", payload.get("error", "").lower())
+        finally:
+            app.config["TESTING"] = True
+            if previous is not None:
+                os.environ["ROOKHIDE_EXPIRY_SIGNING_KEY"] = previous
+
+    def test_decode_requires_expiry_signing_key_when_not_testing(self):
+        previous = os.environ.get("ROOKHIDE_EXPIRY_SIGNING_KEY")
+        try:
+            if "ROOKHIDE_EXPIRY_SIGNING_KEY" in os.environ:
+                del os.environ["ROOKHIDE_EXPIRY_SIGNING_KEY"]
+            app.config["TESTING"] = False
+            response = self.client.post(
+                "/decode",
+                data={
+                    "file_type": "text",
+                    "file": (io.BytesIO(b"not-a-pgn"), "sample.pgn"),
+                },
+                content_type="multipart/form-data",
+            )
+            self.assertEqual(response.status_code, 503)
+            payload = response.get_json()
+            self.assertIn("signing key", payload.get("error", "").lower())
+        finally:
+            app.config["TESTING"] = True
+            if previous is not None:
+                os.environ["ROOKHIDE_EXPIRY_SIGNING_KEY"] = previous
 
 
 if __name__ == "__main__":
